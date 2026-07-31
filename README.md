@@ -1,249 +1,315 @@
-# Chatroom Backend
+# چت‌روم | Chatroom
 
-Node.js backend for a chat app with **groups** and **direct messages**. Users sign up with **name, phone number, and password**.
+پلتفرم چت گروهی و خصوصی بلادرنگ با پنل مدیریت کامل.
+Real-time group + direct-message chat platform with a full admin panel.
 
-## Stack
-- Express (REST API)
-- Socket.IO (real-time messaging)
-- SQLite via `better-sqlite3` (zero-config file database)
-- JWT auth, bcrypt password hashing
+> 🇮🇷 [راهنمای فارسی](#-فارسی) &nbsp;|&nbsp; 🇬🇧 [English guide](#-english)
 
-## Setup
+---
+
+## 🇮🇷 فارسی
+
+### معرفی
+
+یک بک‌اند Node.js همراه با فرانت‌اند تک‌صفحه‌ای (Vanilla JS) برای یک اپلیکیشن چت فارسی‌زبان. کاربران با **نام، شماره موبایل و رمز عبور** ثبت‌نام می‌کنند، در **روم‌های عمومی/خصوصی** یا **پیام خصوصی (DM)** چت می‌کنند، و همه‌چیز از طریق Socket.IO به‌صورت آنی همگام می‌شود. یک پنل ادمین کامل (`/dashboard.html`) هم برای مدیریت کاربران، روم‌ها، فایل‌ها، نقش‌ها و بکاپ‌گیری وجود دارد.
+
+### امکانات
+
+**حساب کاربری و امنیت**
+- ثبت‌نام/ورود با شماره موبایل + رمز عبور، مدیریت چند دستگاه، خروج تکی از هر دستگاه
+- تأیید شماره موبایل و بازیابی رمز با کد یک‌بارمصرف (OTP)
+- سؤالات امنیتی، قفل موقت حساب پس از تلاش‌های ناموفق (Lockout)
+- نام کاربری یکتا (`@username`)
+
+**روم‌ها (گروه‌ها)**
+- روم عمومی/خصوصی، آواتار و بیوگرافی روم
+- سلسله‌مراتب نقش: مالک / ادمین / عضو
+- دعوت مستقیم کاربر + لینک دعوت اشتراکی
+- قفل ارسال به‌تفکیک نوع محتوا (پیام متنی، فایل، عکس، صدا، ویدیو) — فقط مالک/ادمین می‌توانند وقتی قفل است ارسال کنند
+- بلاک و میوت کاربران به‌صورت شخصی
+
+**پیام‌رسانی**
+- پیام متنی، عکس، صدا (ویس)، ویدیو، فایل و استیکر
+- ریپلای، ریاکشن (واکنش ایموجی) و فوروارد پیام
+- ویرایش/حذف پیام، وضعیت خوانده‌شدن (Read Receipts)
+- استیکر: ایمپورت مستقیم پک استیکر تلگرام با توکن ربات (BotFather)
+
+**فایل‌ها**
+- سقف حجم و نوع فایل مجاز، جدا برای هر دسته (عکس/صدا/ویدیو/فایل)، قابل تغییر از پنل سوپرادمین
+- رمزنگاری فایل‌ها هنگام ذخیره‌سازی (AES-256-GCM، envelope encryption)
+- دانلود/نمایش فایل فقط با لینک امن و کوتاه‌مدت (Signed URL با انقضا)
+
+**رابط کاربری**
+- چهار تم رنگی (تاریک شیشه‌ای، تاریک کلاسیک، روشن، روشن کلاسیک) با ذخیره در دستگاه
+- PWA — قابل نصب روی موبایل و دسکتاپ
+- کاملاً واکنش‌گرا (موبایل و دسکتاپ)
+
+**مدیریت (`/dashboard.html`)**
+- سیستم نقش/مجوز (RBAC): `super_admin`، `admin`، `member` + مجوزهای ریز مثل مدیریت کاربران، مدیریت گروه‌ها، نظارت بر پیام‌ها، مدیریت فایل‌ها، اعلان‌ها، مشاهده لاگ
+- کنسول سوپرادمین: مرور همهٔ روم‌ها و همهٔ گفتگوهای خصوصی (همراه با عکس/فایل/ویس/ویدیوی واقعی پیام‌ها)، ارسال اعلان سراسری، بکاپ‌گیری و بازیابی دیتابیس
+- مدیریت تنظیمات آپلود (سقف حجم/نوع فایل هر دسته) بدون نیاز به ری‌استارت سرور
+- لاگ کامل رویدادهای مدیریتی (بن، میوت، تغییر نقش و ...)
+
+### پشته فناوری (Stack)
+| بخش | ابزار |
+|---|---|
+| سرور | Express.js |
+| بلادرنگ | Socket.IO |
+| دیتابیس | SQLite (`better-sqlite3`) — بدون نیاز به سرور جداگانه |
+| احراز هویت | JWT + bcrypt |
+| آپلود | Multer + رمزنگاری AES-256-GCM |
+| فرانت‌اند | HTML/CSS/JS خالص (بدون فریم‌ورک) |
+
+### پیش‌نیازها
+- Node.js نسخه ۱۸ یا بالاتر
+- npm
+
+### نصب و راه‌اندازی
+
 ```bash
+# ۱) نصب پکیج‌ها
 npm install
-cp .env.example .env   # then set a real JWT_SECRET
-npm run dev             # or: npm start
+
+# ۲) کپی فایل تنظیمات نمونه
+cp .env.example .env
+
+# ۳) فایل .env را باز کنید و حداقل این مقادیر را عوض کنید:
+#    JWT_SECRET, UPLOAD_LINK_SECRET, UPLOAD_ENCRYPTION_KEY
+
+# ۴) اجرای مهاجرت‌های دیتابیس (ساخت جداول)
+npm run migrate
+
+# ۵) اجرا در حالت توسعه (ری‌استارت خودکار با nodemon)
+npm run dev
+
+# یا اجرا در حالت پروداکشن
+npm start
 ```
 
-Server runs on `http://localhost:4000` by default.
-Open `http://localhost:4000` in your browser — the frontend (`public/index.html`) is fully wired to the API and Socket.IO: register/login with name+phone+password, create groups, start DMs by phone number, and chat in real time.
+سرور به‌صورت پیش‌فرض روی `http://localhost:4000` بالا می‌آید.
+- فرانت‌اند اصلی چت: `http://localhost:4000/`
+- پنل مدیریت: `http://localhost:4000/dashboard.html`
 
-## Auth
+> مهاجرت‌ها (`npm run migrate`) idempotent هستند؛ یعنی هر بار که سرور را آپدیت کردید فقط کافیست دوباره اجرایشان کنید، مهاجرت‌های قبلاً اجراشده دوباره اجرا نمی‌شوند.
 
-### Register
-`POST /api/auth/register`
-```json
-{ "name": "Hadi", "phone": "+989120000000", "password": "secret123", "deviceName": "iPhone 15" }
-```
-Returns `{ token, user }`. `deviceName` is optional — if omitted, it's guessed from the User-Agent header.
+### تبدیل شدن به سوپرادمین (اولین بار)
 
-### Login
-`POST /api/auth/login`
-```json
-{ "phone": "+989120000000", "password": "secret123", "deviceName": "iPhone 15" }
-```
-Returns `{ token, user }`.
+اولین سوپرادمین با شمارهٔ موبایل هاردکد در `helpers/superAdmin.js` مشخص می‌شود:
 
-Send the token on every request after that:
-```
-Authorization: Bearer <token>
-```
-
-### Logout
-`POST /api/auth/logout` — ends only the current device's session.
-
-## Account security
-
-### Username (`@username`)
-`PUT /api/users/me/username`
-```json
-{ "username": "hadi_dev" }
-```
-5-32 characters, must start with a letter, letters/numbers/underscore only, unique
-(case-insensitive), with or without a leading `@`. Returned in the profile as `@hadi_dev`.
-
-### Phone number verification
-| Method | Route | Body | Description |
-|---|---|---|---|
-| POST | `/api/auth/phone/verify/request` | — | sends a 6-digit code to your own phone via SMS |
-| POST | `/api/auth/phone/verify/confirm` | `{ code }` | confirms the code, sets `phoneVerified: true` |
-
-### Password reset
-| Method | Route | Body | Description |
-|---|---|---|---|
-| POST | `/api/auth/password/forgot` | `{ phone }` | sends a reset code by SMS if that phone has an account (response is identical either way, so phone numbers can't be enumerated) |
-| POST | `/api/auth/password/reset` | `{ phone, code, newPassword }` | verifies the code and sets the new password |
-
-A successful reset signs the account out of **every** device (all sessions revoked, any open
-socket connections disconnected) since the old password may have been compromised.
-
-Codes expire after `OTP_TTL_MINUTES` (default 5), allow `OTP_MAX_ATTEMPTS` wrong tries (default 5),
-and can only be re-requested every `OTP_RESEND_SECONDS` (default 60). No SMS gateway is wired up —
-each generated code is written to the `logs` table (`helpers/logger.js`) instead, visible via
-`GET /api/logs` (admin only) or the server console. Plug in a real SMS gateway later by sending
-the code from `otp.createOtp(...)` (see `routes/auth.js`) through whichever provider you choose.
-
-### Session management
-Every login/register creates a session row (device name, user agent, IP, timestamps) tied to that
-JWT via a `jti` claim. Revoking a session immediately invalidates its token and disconnects any live
-Socket.IO connection using it — no need to wait for the token to expire.
-
-| Method | Route | Description |
-|---|---|---|
-| GET | `/api/auth/sessions` | list your active sessions/devices (`current: true` marks this one) |
-| DELETE | `/api/auth/sessions/:id` | revoke one specific session |
-| DELETE | `/api/auth/sessions/others` | force logout every device **except** this one |
-| DELETE | `/api/auth/sessions` | force logout **every** device, including this one |
-
-## Groups
-
-| Method | Route | Body | Description |
-|---|---|---|---|
-| POST | `/api/groups` | `{ name, memberPhones?: [] }` | create a group |
-| GET | `/api/groups` | — | list groups you belong to |
-| POST | `/api/groups/:id/join` | — | join a group |
-| GET | `/api/groups/:id/members` | — | list members |
-| GET | `/api/groups/:id/messages?before=&limit=` | — | message history |
-
-## Direct messages
-
-| Method | Route | Body | Description |
-|---|---|---|---|
-| POST | `/api/conversations` | `{ phone }` | start/get a DM with a user by phone |
-| GET | `/api/conversations` | — | list your DMs |
-| GET | `/api/conversations/:id/messages?before=&limit=` | — | message history |
-
-## Profile
-
-| Method | Route | Body | Description |
-|---|---|---|---|
-| GET | `/api/users/me` | — | your own profile |
-| PATCH | `/api/users/me` | `{ name?, bio? }` | edit your name and/or bio |
-| POST | `/api/users/me/avatar` | multipart, field `avatar` | change your profile picture |
-| GET | `/api/users/:id` | — | view any user's profile |
-| GET | `/api/users/:id/avatar` | — | fetch a user's avatar image |
-
-A profile includes: `id`, `name`, `username` (as `@handle`, or `null`), `bio`, `avatarUrl`, `createdAt` (join date),
-`lastSeenAt`, `online`, `roles`. Online status and profile edits (name, bio,
-avatar) are pushed live over Socket.IO (`presence:update`,
-`profile:updated`) so open profile views update without a page refresh.
-
-## Real-time (Socket.IO)
-
-Connect with the JWT:
 ```js
-const socket = io('http://localhost:4000', { auth: { token } });
+const SUPER_ADMIN_PHONE_DIGITS = '9106736500';
 ```
 
-Events:
-- `join` → `{ type: 'group' | 'dm', id }` — subscribe to a chat
-- `message:send` → `{ target: { type, id }, content }` — send a message
-- `message:new` ← `{ target, message }` — new message broadcast
-- `message:edit` → `{ target, messageId, content }` — edit your own message
-- `message:edited` ← `{ target, message }` — broadcast when a message is edited
-- `message:delete` → `{ target, messageId }` — delete (soft-delete) your own message
-- `message:deleted` ← `{ target, messageId, deletedAt }` — broadcast when a message is deleted
-- `message:pin` → `{ target, messageId }` — pin a message
-- `message:pinned` ← `{ target, message }` — broadcast when a message is pinned
-- `message:unpin` → `{ target, messageId }` — unpin a message
-- `message:unpinned` ← `{ target, messageId }` — broadcast when a message is unpinned
-- `typing` → `{ type, id }` — notify others you're typing
-- `error:message` ← `{ error }` — sent back to you only, when an edit/delete/pin/unpin/send is rejected
-- `session:revoked` ← `{ reason }` — sent right before the server disconnects this socket because its
-  session was logged out, deleted, or force-logged-out from elsewhere (`reason`: `logout`,
-  `session_deleted`, `force_logout`, or `password_reset`)
+**قبل از دیپلوی**، این عدد را با شمارهٔ موبایل خودتان (بدون `0` یا `98` ابتدایی) عوض کنید، سپس با همان شماره در اپ ثبت‌نام کنید — به‌محض راه‌اندازی سرور، نقش `super_admin` به‌صورت خودکار به آن حساب داده می‌شود. بعد از آن، از داخل پنل مدیریت (تب نقش‌ها) می‌توانید به بقیهٔ کاربران هم نقش `admin`/`member` بدهید.
 
-Only the original sender can edit or delete their own message; any group member / DM participant can pin or unpin. Deleted messages are kept as soft-deleted rows (`content` cleared, `deleted_at` set) so message ids stay stable in open UIs.
+### متغیرهای محیطی (`.env`)
 
-## Message history: infinite scroll, search, pinned
+| متغیر | توضیح | پیش‌فرض |
+|---|---|---|
+| `PORT` | پورت سرور | `4000` |
+| `JWT_SECRET` | کلید امضای توکن ورود — حتماً در پروداکشن تغییر دهید | — |
+| `JWT_EXPIRES_IN` | مدت اعتبار توکن ورود | `7d` |
+| `DB_PATH` | مسیر فایل دیتابیس SQLite | `./data/chat.db` |
+| `BACKUP_DIR` | مسیر ذخیرهٔ بکاپ‌های دیتابیس | کنار فایل دیتابیس |
+| `CORS_ORIGIN` | دامنه‌های مجاز برای CORS | `*` |
+| `UPLOAD_DIR` | مسیر ذخیرهٔ فایل‌های آپلودی | `./uploads` |
+| `MAX_FILE_SIZE_MB` / `MAX_IMAGE_SIZE_MB` / `MAX_VOICE_SIZE_MB` / `MAX_VIDEO_SIZE_MB` | سقف حجم هر دسته (مگابایت) — بعداً هم از پنل سوپرادمین قابل تغییرند | متفاوت |
+| `FILE_ALLOWED_TYPES` / `IMAGE_ALLOWED_TYPES` / `VOICE_ALLOWED_TYPES` / `VIDEO_ALLOWED_TYPES` | لیست MIME type مجاز هر دسته | متفاوت |
+| `UPLOAD_ENCRYPTION_KEY` | کلید ۳۲ بایتی برای رمزنگاری فایل‌ها روی دیسک (hex یا base64) — **الزامی برای پروداکشن** | — |
+| `UPLOAD_LINK_SECRET` | کلید امضای لینک‌های دانلود امن | — |
+| `UPLOAD_LINK_TTL_MINUTES` | مدت اعتبار لینک دانلود | `15` |
+| `TELEGRAM_BOT_TOKEN` | توکن ربات تلگرام برای ایمپورت پک استیکر (اختیاری) | — |
+| `STICKERS_DIR` | مسیر ذخیرهٔ استیکرهای ایمپورت‌شده | داخل `UPLOAD_DIR` |
+| `MAX_STICKERS_PER_PACK` | سقف تعداد استیکر هر پک | `200` |
+| `DEFAULT_PAGE_SIZE` / `MAX_PAGE_SIZE` | صفحه‌بندی نتایج API | `20` / `100` |
+| `LOG_LEVEL` / `LOG_TO_CONSOLE` | تنظیمات لاگ | `info` / `true` |
+| `OTP_TTL_MINUTES` / `OTP_MAX_ATTEMPTS` / `OTP_RESEND_SECONDS` | تنظیمات کد یک‌بارمصرف (تأیید شماره/بازیابی رمز) | `5` / `5` / `60` |
 
-- `GET /api/groups/:id/messages?before=&limit=` / `GET /api/conversations/:id/messages?before=&limit=` — paginated history (infinite scroll), now also returns `edited_at`, `deleted_at`, `pinned_at`, `pinned_by`, `pinned_by_name` per message.
-- `GET /api/groups/:id/messages/search?q=&before=&limit=` / `GET /api/conversations/:id/messages/search?q=&before=&limit=` — full-text-ish search (`LIKE`) over non-deleted message content, same pagination shape.
-- `GET /api/groups/:id/messages/pinned` / `GET /api/conversations/:id/messages/pinned` — list currently pinned messages, most recently pinned first.
+### ساختار پروژه
 
-## Monitoring dashboard (admin only)
+```
+├── server.js            نقطهٔ ورود سرور
+├── config/               تنظیمات
+├── db/                    اتصال دیتابیس + migrations
+├── helpers/              منطق مشترک (پرمیشن، آپلود، امنیت و ...)
+├── middleware/           میان‌افزار Express (auth و ...)
+├── routes/                اندپوینت‌های REST API
+├── sockets/               منطق بلادرنگ Socket.IO
+├── events/                باس رویداد داخلی
+├── scripts/migrate.js     اجراکنندهٔ migrationها
+└── public/
+    ├── index.html          فرانت‌اند اصلی چت
+    └── dashboard.html      پنل مدیریت
+```
 
-Open `http://localhost:4000/dashboard.html` and log in with an account that has the `admin` or `super_admin` role. All stats update live over the `/dashboard` Socket.IO namespace (every few seconds, plus instantly on new messages/uploads/users/presence changes):
+### دیپلوی (Railway / VPS)
 
-- Online / offline / total users, total admins, total rooms, total messages, total files, total voice messages (uploads with an `audio/*` mime type)
-- RAM and CPU usage, server uptime
-- Server / database / WebSocket connection status
-- Messages chart and user-activity chart (last 24 hours, hourly)
-- Current Jalali (Persian) date
+1. متغیرهای محیطی بالا را در پنل هاست تنظیم کنید (حتماً `JWT_SECRET`، `UPLOAD_ENCRYPTION_KEY`، `UPLOAD_LINK_SECRET`).
+2. مطمئن شوید مسیرهای `DB_PATH` و `UPLOAD_DIR` روی یک **Volume دائمی** قرار دارند (نه فایل‌سیستم موقت)، وگرنه با هر ری‌دیپلوی دیتا و فایل‌ها پاک می‌شوند.
+3. دستور Build: `npm install` — دستور Start: `npm start` (بعد از اولین دیپلوی یک‌بار `npm run migrate` را هم اجرا کنید).
+4. اگر پشت HTTPS/Proxy هستید، `CORS_ORIGIN` را به دامنهٔ واقعی فرانت‌اند محدود کنید.
 
-REST snapshot (same data, one-time): `GET /api/dashboard/stats` (requires `Authorization: Bearer <token>` for an admin/super_admin user).
+### اسکریپت‌های npm
 
-## Data model
-`users`, `groups`, `group_members`, `conversations`, `messages`, `sessions`, `otp_codes` — see
-`db/index.js` and `db/migrations/` for the full SQLite schema.
+| دستور | کاربرد |
+|---|---|
+| `npm start` | اجرای سرور در حالت عادی |
+| `npm run dev` | اجرا با nodemon (ری‌استارت خودکار هنگام تغییر کد) |
+| `npm run migrate` | اجرای مهاجرت‌های دیتابیس |
 
-## Notes
-- The SQLite file is created at `./data/chat.db` (git-ignored).
-- Swap `better-sqlite3` for Postgres/MySQL later without touching the routes much — the queries are isolated in `routes/` and `db/`.
+---
 
-## Infrastructure (RBAC, migrations, notifications, logs, uploads)
+## 🇬🇧 English
 
-This groundwork is in place for future features. Nothing here changes existing
-behavior — it's additive scaffolding only.
+### Overview
 
-- **Migrations** (`db/migrations/`): each file exports `{ name, up(db) }`.
-  Applied automatically on boot (tracked in a `migrations` table) or manually
-  with `npm run migrate`.
-- **Roles & permissions** (`helpers/permissions.js`): `permissions`, `roles`,
-  `role_permissions`, `user_roles` tables. Seeded roles: `super_admin`,
-  `admin`, `member` (new users get `member` automatically). Use
-  `requirePermission('key')` / `requireRole('key')` as route middleware.
-  - `GET /api/roles/me` — current user's roles & permissions
-  - `GET /api/roles`, `GET /api/roles/permissions` — admin only (`roles.manage`)
-- **Notifications** (`helpers/notifier.js`, `notifications` table):
-  - `GET /api/notifications`, `GET /api/notifications/unread-count`
-  - `POST /api/notifications/:id/read`, `POST /api/notifications/read-all`
-- **Logs** (`helpers/logger.js`, `logs` table): every HTTP error and every
-  emitted domain event is recorded automatically.
-  - `GET /api/logs` — admin only (`logs.view`)
-- **Uploads / file system** (`helpers/upload.js`, `helpers/crypto.js`,
-  `helpers/downloadLink.js`, `uploads` table, local disk storage under
-  `UPLOAD_DIR`, works on a plain VPS/shared host — no cloud dependency):
-  - Three send endpoints, one per kind, each with its own size/type limits
-    (`config/index.js`, env vars `MAX_FILE_SIZE_MB`/`FILE_ALLOWED_TYPES`,
-    `MAX_IMAGE_SIZE_MB`/`IMAGE_ALLOWED_TYPES`, `MAX_VOICE_SIZE_MB`/`VOICE_ALLOWED_TYPES`):
-    - `POST /api/uploads/file` (multipart field `file`) — send a file
-    - `POST /api/uploads/image` (multipart field `image`) — send a photo
-    - `POST /api/uploads/voice` (multipart field `voice`) — send a voice message
-  - `GET /api/uploads` — list your own uploads; `GET /api/uploads/:id` — metadata
-    (accessible to the uploader, and to anyone the file was actually sent to in a chat)
-  - `GET /api/uploads/:id/download` — download the file (`Content-Disposition: attachment`)
-  - `GET /api/uploads/:id/stream` — inline, with HTTP Range support (206 Partial
-    Content) for online voice playback (`<audio src="...">`) and image previews
-  - `GET /api/uploads/:id/link` — mint a short-lived, signed download link
-    (`?token=...`, default 15 min via `UPLOAD_LINK_TTL_MINUTES`) that works on
-    `/download` or `/stream` without an `Authorization` header
-  - **Encryption at rest**: every file is encrypted while it's written to disk
-    (AES-256-GCM, envelope encryption — each file gets its own random key, which
-    is itself encrypted with `UPLOAD_ENCRYPTION_KEY`). Plaintext is never
-    persisted; files are decrypted on the fly when served. A SHA-256 checksum is
-    stored for integrity.
-  - **Upload progress**: send an `X-Upload-Id: <id-you-make-up>` header on the
-    upload request; the server emits `upload:progress` Socket.IO events
-    (`{ uploadId, loaded, total, percent }`) to your own connection(s) as the
-    request body is received, finishing with `{ percent: 100, done: true }`.
-  - **Sending a file/photo/voice message**: upload it first via one of the
-    three endpoints above to get an `id`, then send it over Socket.IO:
-    `message:send` → `{ target, content?, attachment: { uploadId, category: 'file'|'image'|'voice' } }`
-    (`content` is an optional caption). The upload must belong to you and not
-    already be attached to another message. Message history
-    (`GET .../messages`, `.../messages/search`, `.../messages/pinned`) and the
-    `message:new`/`message:edited`/`message:pinned` socket events now include
-    `message_type` (`text`|`file`|`image`|`voice`) and, when present, an
-    `attachment` object (`id`, `original_name`, `mime_type`, `size`, `category`).
-  - **Size limits from the super-admin panel** (`helpers/settings.js`,
-    `settings` table): the `.env` values above are just the defaults — a
-    `super_admin` (not a regular `admin`; needs the `settings.manage`
-    permission) can change the per-category max size at runtime, no restart
-    needed:
-    - `GET /api/admin/settings/upload-limits` — current effective limits
-    - `PATCH /api/admin/settings/upload-limits` `{ file?, image?, voice? }` (MB, 1–500) —
-      update one or more categories
-    - `DELETE /api/admin/settings/upload-limits/:category` — revert that
-      category back to its `.env` default
-    - `GET /api/uploads/limits` — read-only, any authenticated user (so
-      clients can show the current limit before picking a file)
-- **Events** (`events/bus.js`, `events/types.js`): a simple in-process
-  `EventEmitter`. Existing routes/sockets emit events
-  (`user.registered`, `user.logged_in`, `group.created`,
-  `conversation.created`, `message.sent`, `file.uploaded`,
-  `notification.created`) that future features can subscribe to.
-- **Config** (`config/index.js`): centralizes env vars (uploads, pagination,
-  logging). See `.env.example` for the new variables.
-- **Helpers** (`helpers/`): `asyncHandler.js`, `response.js`,
-  `pagination.js` — shared utilities for building new routes consistently.
+A Node.js backend with a vanilla-JS single-page frontend for a Persian-language chat app. Users sign up with **name, phone number, and password**, chat in **public/private rooms** or **direct messages**, and everything syncs live over Socket.IO. A full admin dashboard (`/dashboard.html`) is included for managing users, rooms, files, roles, and backups.
+
+### Features
+
+**Account & security**
+- Register/login with phone + password, multi-device sessions, per-device logout
+- Phone verification and password reset via OTP
+- Security questions, temporary account lockout after failed attempts
+- Unique `@username`
+
+**Rooms (groups)**
+- Public/private rooms with avatar and bio
+- Role hierarchy: owner / admin / member
+- Direct invites + shareable invite links
+- Per-content-type send locks (text, files, images, voice, video) — only owner/admin can send while locked
+- Personal block/mute of other users
+
+**Messaging**
+- Text, image, voice, video, file, and sticker messages
+- Reply, emoji reactions, and forwarding
+- Edit/delete, read receipts
+- Stickers: import a Telegram sticker pack directly via a bot token (BotFather)
+
+**Files**
+- Per-category size and allowed-MIME-type limits (image/voice/video/file), tunable live from the super-admin panel
+- At-rest file encryption (AES-256-GCM, envelope encryption)
+- Files are only ever served through short-lived signed download links
+
+**UI**
+- Four color themes (dark glass, dark classic, light, light classic), saved per device
+- Installable PWA (mobile and desktop)
+- Fully responsive
+
+**Admin panel (`/dashboard.html`)**
+- Role-based access control: `super_admin`, `admin`, `member`, plus granular permissions (user management, group management, message moderation, upload management, notifications, logs)
+- Super-admin console: browse every room and every DM conversation (with real images/files/voice/video, not just labels), send global broadcasts, create/restore database backups
+- Live-editable upload limits per category, no server restart needed
+- Full audit log of admin actions (bans, mutes, role changes, etc.)
+
+### Stack
+| Layer | Tool |
+|---|---|
+| Server | Express.js |
+| Real-time | Socket.IO |
+| Database | SQLite (`better-sqlite3`) — no separate DB server needed |
+| Auth | JWT + bcrypt |
+| Uploads | Multer + AES-256-GCM encryption |
+| Frontend | Plain HTML/CSS/JS (no framework) |
+
+### Requirements
+- Node.js 18+
+- npm
+
+### Setup
+
+```bash
+# 1) Install dependencies
+npm install
+
+# 2) Copy the example env file
+cp .env.example .env
+
+# 3) Open .env and change at least:
+#    JWT_SECRET, UPLOAD_LINK_SECRET, UPLOAD_ENCRYPTION_KEY
+
+# 4) Run database migrations (creates tables)
+npm run migrate
+
+# 5) Start in dev mode (auto-restart via nodemon)
+npm run dev
+
+# or run in production mode
+npm start
+```
+
+The server runs on `http://localhost:4000` by default.
+- Chat frontend: `http://localhost:4000/`
+- Admin dashboard: `http://localhost:4000/dashboard.html`
+
+> Migrations (`npm run migrate`) are idempotent — after updating the server, just run it again; already-applied migrations are skipped.
+
+### Becoming super admin (first run)
+
+The first super admin is determined by a hardcoded phone number in `helpers/superAdmin.js`:
+
+```js
+const SUPER_ADMIN_PHONE_DIGITS = '9106736500';
+```
+
+**Before deploying**, change this to your own phone number (digits only, no leading `0` or `98`), then register in the app with that same number — the `super_admin` role is granted to that account automatically on server startup. After that, use the dashboard's Roles tab to grant `admin`/`member` to other users.
+
+### Environment variables (`.env`)
+
+| Variable | Description | Default |
+|---|---|---|
+| `PORT` | Server port | `4000` |
+| `JWT_SECRET` | Login token signing key — change in production | — |
+| `JWT_EXPIRES_IN` | Login token lifetime | `7d` |
+| `DB_PATH` | SQLite database file path | `./data/chat.db` |
+| `BACKUP_DIR` | Where database backups are stored | next to the DB file |
+| `CORS_ORIGIN` | Allowed CORS origin(s) | `*` |
+| `UPLOAD_DIR` | Where uploaded files are stored | `./uploads` |
+| `MAX_FILE_SIZE_MB` / `MAX_IMAGE_SIZE_MB` / `MAX_VOICE_SIZE_MB` / `MAX_VIDEO_SIZE_MB` | Per-category size cap (MB) — also editable later from the super-admin panel | varies |
+| `FILE_ALLOWED_TYPES` / `IMAGE_ALLOWED_TYPES` / `VOICE_ALLOWED_TYPES` / `VIDEO_ALLOWED_TYPES` | Allowed MIME types per category | varies |
+| `UPLOAD_ENCRYPTION_KEY` | 32-byte key for at-rest file encryption (hex or base64) — **required in production** | — |
+| `UPLOAD_LINK_SECRET` | Signing key for secure download links | — |
+| `UPLOAD_LINK_TTL_MINUTES` | Download link lifetime | `15` |
+| `TELEGRAM_BOT_TOKEN` | Telegram bot token for sticker-pack import (optional) | — |
+| `STICKERS_DIR` | Where imported stickers are stored | inside `UPLOAD_DIR` |
+| `MAX_STICKERS_PER_PACK` | Max stickers per imported pack | `200` |
+| `DEFAULT_PAGE_SIZE` / `MAX_PAGE_SIZE` | API pagination | `20` / `100` |
+| `LOG_LEVEL` / `LOG_TO_CONSOLE` | Logging config | `info` / `true` |
+| `OTP_TTL_MINUTES` / `OTP_MAX_ATTEMPTS` / `OTP_RESEND_SECONDS` | OTP (phone verify / password reset) config | `5` / `5` / `60` |
+
+### Project structure
+
+```
+├── server.js            Server entry point
+├── config/               Configuration
+├── db/                    DB connection + migrations
+├── helpers/              Shared logic (permissions, uploads, security, ...)
+├── middleware/           Express middleware (auth, ...)
+├── routes/                REST API endpoints
+├── sockets/               Socket.IO real-time logic
+├── events/                Internal event bus
+├── scripts/migrate.js     Migration runner
+└── public/
+    ├── index.html          Main chat frontend
+    └── dashboard.html      Admin dashboard
+```
+
+### Deployment (Railway / VPS)
+
+1. Set the environment variables above on your host (`JWT_SECRET`, `UPLOAD_ENCRYPTION_KEY`, and `UPLOAD_LINK_SECRET` in particular).
+2. Make sure `DB_PATH` and `UPLOAD_DIR` point to a **persistent volume**, not ephemeral storage — otherwise data and files are wiped on every redeploy.
+3. Build command: `npm install` — Start command: `npm start` (run `npm run migrate` once after the first deploy).
+4. If you're behind HTTPS/a proxy, restrict `CORS_ORIGIN` to your actual frontend domain.
+
+### npm scripts
+
+| Command | Purpose |
+|---|---|
+| `npm start` | Run the server normally |
+| `npm run dev` | Run with nodemon (auto-restart on file changes) |
+| `npm run migrate` | Run pending database migrations |
+
+---
+
+## License
+MIT
