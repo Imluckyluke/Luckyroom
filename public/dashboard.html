@@ -1,0 +1,1169 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>داشبورد مانیتورینگ</title>
+<link href="https://cdnjs.cloudflare.com/ajax/libs/vazirmatn/33.0.3/Vazirmatn-font-face.css" rel="stylesheet">
+<script src="/socket.io/socket.io.js"></script>
+<style>
+  :root{
+    --tg-blue:#3FA9F5; --ink:#EDEEF2; --muted:#8B8D97;
+    --glass-fill: rgba(255,255,255,0.06); --glass-edge: rgba(255,255,255,0.14);
+    --good:#3ED598; --bad:#FF6B6B; --warn:#FFC24B;
+  }
+  *{box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent;}
+  html,body{height:100%; font-family:'Vazirmatn', sans-serif;}
+  html{ scroll-behavior:smooth; }
+  body{
+    background: linear-gradient(160deg, #08090D, #0B0D14 60%, #0A0A12);
+    color: var(--ink); min-height:100%; padding:24px;
+    animation: pageIn .4s cubic-bezier(.2,.8,.25,1) both;
+  }
+  @keyframes pageIn{ from{ opacity:0; transform: translateY(10px); } to{ opacity:1; transform: translateY(0); } }
+  @keyframes cardIn{ from{ opacity:0; transform: translateY(12px) scale(.97); } to{ opacity:1; transform: translateY(0) scale(1); } }
+  .topbar{ display:flex; align-items:center; justify-content:space-between; margin-bottom:20px; flex-wrap:wrap; gap:10px; }
+  .topbar h1{ font-size:19px; font-weight:700; }
+  .jalali-date{ font-size:13.5px; color: var(--muted); }
+  .grid{ display:grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap:12px; margin-bottom:20px; }
+  .card{
+    background: var(--glass-fill); border:1px solid var(--glass-edge); border-radius:16px; padding:16px;
+    transition: transform .2s ease, box-shadow .2s ease, background .3s ease;
+    animation: cardIn .4s cubic-bezier(.2,.8,.25,1) both;
+  }
+  .card:hover{ transform: translateY(-3px); box-shadow: 0 10px 24px rgba(0,0,0,0.35); }
+  .card .label{ font-size:12px; color: var(--muted); margin-bottom:6px; }
+  .card .value{ font-size:24px; font-weight:700; transition: color .3s ease; }
+  .card .value.good{ color: var(--good); }
+  .card .value.bad{ color: var(--bad); }
+  .badge{ display:inline-flex; align-items:center; gap:6px; font-size:13px; padding:4px 10px; border-radius:999px; }
+  .badge .dot{ width:8px; height:8px; border-radius:50%; }
+  .badge.ok{ background: rgba(62,213,152,0.12); color: var(--good); }
+  .badge.ok .dot{ background: var(--good); }
+  .badge.fail{ background: rgba(255,107,107,0.12); color: var(--bad); }
+  .badge.fail .dot{ background: var(--bad); }
+  .progress-bar{ height:8px; border-radius:6px; background: rgba(255,255,255,0.08); overflow:hidden; margin-top:8px; }
+  .progress-fill{ height:100%; background: var(--tg-blue); transition: width .4s ease; }
+  .progress-fill.warn{ background: var(--warn); }
+  .progress-fill.bad{ background: var(--bad); }
+  .charts{ display:grid; grid-template-columns: 1fr 1fr; gap:14px; }
+  @media (max-width: 760px){ .charts{ grid-template-columns: 1fr; } }
+  .chart-card{ background: var(--glass-fill); border:1px solid var(--glass-edge); border-radius:16px; padding:16px; }
+  .chart-card .label{ font-size:13px; color: var(--muted); margin-bottom:8px; }
+  canvas{ width:100%; height:160px; display:block; }
+  .conn-hint{ font-size:12.5px; color: var(--muted); margin-top:2px; }
+
+  .login-wrap{ max-width:340px; margin:120px auto; background: var(--glass-fill); border:1px solid var(--glass-edge); border-radius:18px; padding:26px; animation: cardIn .45s cubic-bezier(.2,.8,.25,1) both; }
+  .login-wrap h2{ font-size:17px; margin-bottom:16px; }
+  .login-wrap input{
+    width:100%; padding:10px 12px; margin-bottom:10px; border-radius:10px; border:1px solid var(--glass-edge);
+    background: rgba(255,255,255,0.06); color: var(--ink); font-family:inherit; outline:none;
+    transition: border-color .2s ease, transform .15s ease;
+  }
+  .login-wrap input:focus{ border-color: var(--tg-blue); transform: translateY(-1px); }
+  .login-wrap button{
+    width:100%; padding:10px; border:none; border-radius:10px; background: var(--tg-blue); color:#fff;
+    font-family:inherit; font-size:14px; cursor:pointer; margin-top:4px;
+    transition: transform .15s cubic-bezier(.34,1.56,.64,1), box-shadow .2s ease;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .login-wrap button:hover{ transform: translateY(-1px); box-shadow: 0 6px 16px rgba(63,169,245,0.35); }
+  .login-wrap button:active{ transform: scale(.97); }
+
+  @media (prefers-reduced-motion: reduce){
+    body, .card, .login-wrap{ animation:none !important; }
+    *{ transition-duration:.01ms !important; }
+  }
+  .login-error{ color: var(--bad); font-size:12.5px; min-height:16px; margin-top:6px; }
+  .hidden{ display:none !important; }
+
+  .panel{ background: var(--glass-fill); border:1px solid var(--glass-edge); border-radius:16px; padding:18px; margin-top:20px; }
+  .panel h2{ font-size:16px; margin-bottom:14px; }
+  .panel h3{ font-size:13.5px; color: var(--muted); margin:18px 0 10px; font-weight:600; }
+  .panel h3:first-of-type{ margin-top:0; }
+  .row{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  .field{
+    padding:9px 11px; border-radius:10px; border:1px solid var(--glass-edge);
+    background: rgba(255,255,255,0.05); color: var(--ink); font-family:inherit; font-size:13.5px; outline:none;
+  }
+  .field.grow{ flex:1; min-width:160px; }
+  select.field{ cursor:pointer; }
+  .btn{
+    padding:9px 14px; border:none; border-radius:10px; background: var(--tg-blue); color:#fff;
+    font-family:inherit; font-size:13px; cursor:pointer; white-space:nowrap;
+  }
+  .btn:hover{ filter:brightness(1.08); }
+  .btn:disabled{ opacity:0.5; cursor:not-allowed; }
+  .btn.danger{ background: var(--bad); }
+  .btn.warn{ background: var(--warn); color:#1a1400; }
+  .btn.good{ background: var(--good); color:#04241a; }
+  .btn.ghost{ background: rgba(255,255,255,0.08); }
+  .btn.small{ padding:6px 10px; font-size:12px; }
+
+  .msg-line{ font-size:12.5px; min-height:16px; margin-top:8px; }
+  .msg-line.ok{ color: var(--good); }
+  .msg-line.err{ color: var(--bad); }
+
+  .user-card{
+    margin-top:12px; padding:14px; border-radius:12px; background: rgba(255,255,255,0.04);
+    border:1px solid var(--glass-edge); display:none;
+  }
+  .user-card.show{ display:block; }
+  .user-card .who{ font-size:14.5px; font-weight:700; margin-bottom:2px; }
+  .user-card .sub{ font-size:12px; color: var(--muted); margin-bottom:10px; }
+  .tag{ display:inline-flex; align-items:center; gap:5px; font-size:11.5px; padding:3px 9px; border-radius:999px; margin-inline-end:6px; }
+  .tag.banned{ background: rgba(255,107,107,0.14); color: var(--bad); }
+  .tag.muted{ background: rgba(255,194,75,0.14); color: var(--warn); }
+  .tag.clean{ background: rgba(62,213,152,0.14); color: var(--good); }
+
+  table.admins{ width:100%; border-collapse: collapse; margin-top:6px; font-size:13px; }
+  table.admins th, table.admins td{ text-align:right; padding:9px 8px; border-bottom:1px solid var(--glass-edge); }
+  table.admins th{ color: var(--muted); font-weight:600; font-size:12px; }
+  .role-pill{ display:inline-block; font-size:11px; padding:2px 8px; border-radius:999px; background: rgba(63,169,245,0.14); color: var(--tg-blue); margin-inline-end:4px; }
+  .online-dot{ display:inline-flex; align-items:center; gap:6px; font-size:12.5px; }
+  .online-dot .d{ width:7px; height:7px; border-radius:50%; }
+  .online-dot.on .d{ background: var(--good); }
+  .online-dot.off .d{ background: var(--muted); }
+
+  .msg-list{ margin-top:12px; max-height:280px; overflow-y:auto; display:none; }
+  .msg-list.show{ display:block; }
+  .msg-item{ padding:8px 10px; border-radius:10px; background: rgba(255,255,255,0.03); margin-bottom:6px; font-size:12.5px; }
+  .msg-item .meta{ color: var(--muted); font-size:11px; margin-bottom:3px; }
+  .msg-item .meta .who{ color: var(--tg-blue); font-weight:700; font-size:12.5px; }
+  .msg-item .meta .when{ color: var(--muted); }
+  .msg-item.deleted{ opacity:0.5; font-style: italic; }
+  .msg-media{ margin-top:4px; }
+  .msg-media-img{ display:block; max-width:220px; max-height:260px; border-radius:10px; cursor:pointer; object-fit:cover; }
+  .msg-media-audio{ display:block; max-width:220px; height:34px; }
+  .msg-media-video{ display:block; max-width:260px; max-height:280px; border-radius:10px; background:#000; }
+  .msg-media-loading, .msg-media-error{ font-size:11px; color: var(--muted); padding:4px 0; }
+  .msg-media-error{ color: var(--danger); }
+  .msg-media-file{ display:flex; align-items:center; gap:6px; background: rgba(255,255,255,0.04); border-radius:8px; padding:6px 8px; margin-top:4px; }
+  .msg-media-file-icon{ font-size:16px; flex-shrink:0; }
+  .msg-media-file-name{ font-size:12px; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .msg-media-file-size{ font-size:11px; color: var(--muted); flex-shrink:0; }
+  .msg-media-file-dl{ font-size:11px; color: var(--tg-blue); text-decoration:none; flex-shrink:0; }
+  .empty-hint{ font-size:12.5px; color: var(--muted); padding:8px 2px; }
+
+  /* Two-way conversation view (DMs): bubbles aligned left/right per side */
+  .convo-legend{ display:flex; gap:16px; font-size:11.5px; color:var(--muted); margin-bottom:8px; }
+  .convo-legend span{ display:inline-flex; align-items:center; gap:5px; }
+  .convo-legend .dot{ width:8px; height:8px; border-radius:50%; }
+  .convo-row{ display:flex; margin-bottom:8px; }
+  .convo-row.side-a{ justify-content:flex-end; }
+  .convo-row.side-b{ justify-content:flex-start; }
+  .convo-bubble{ max-width:72%; padding:8px 12px; border-radius:14px; font-size:12.5px; }
+  .convo-row.side-a .convo-bubble{ background: rgba(63,169,245,0.18); border-bottom-right-radius:4px; }
+  .convo-row.side-b .convo-bubble{ background: rgba(255,255,255,0.06); border-bottom-left-radius:4px; }
+  .convo-bubble .meta{ color: var(--muted); font-size:10.5px; margin-bottom:3px; }
+  .convo-bubble .meta .who{ font-weight:700; font-size:11.5px; }
+  .convo-row.side-a .convo-bubble .meta .who{ color: var(--tg-blue); }
+  .convo-row.side-b .convo-bubble .meta .who{ color: var(--ink); }
+  .convo-bubble .meta .when{ color: var(--muted); }
+  .convo-bubble.deleted{ opacity:0.5; font-style: italic; }
+</style>
+</head>
+<body>
+
+<div id="loginScreen" class="login-wrap hidden">
+  <h2>ورود ادمین</h2>
+  <input type="text" id="phoneInput" placeholder="شماره تلفن">
+  <input type="password" id="passwordInput" placeholder="رمز عبور">
+  <button id="loginBtn">ورود</button>
+  <div class="login-error" id="loginError"></div>
+</div>
+
+<div id="dashboard" class="hidden">
+  <div class="topbar">
+    <h1>داشبورد مانیتورینگ</h1>
+    <div class="jalali-date" id="jalaliDate"></div>
+  </div>
+
+  <div class="grid">
+    <div class="card"><div class="label">کاربران آنلاین</div><div class="value good" id="stOnline">-</div></div>
+    <div class="card"><div class="label">کاربران آفلاین</div><div class="value" id="stOffline">-</div></div>
+    <div class="card"><div class="label">تعداد کاربران</div><div class="value" id="stUsers">-</div></div>
+    <div class="card"><div class="label">تعداد ادمین‌ها</div><div class="value" id="stAdmins">-</div></div>
+    <div class="card"><div class="label">تعداد روم‌ها</div><div class="value" id="stRooms">-</div></div>
+    <div class="card"><div class="label">تعداد پیام‌ها</div><div class="value" id="stMessages">-</div></div>
+    <div class="card"><div class="label">تعداد فایل‌ها</div><div class="value" id="stFiles">-</div></div>
+    <div class="card"><div class="label">تعداد ویس‌ها</div><div class="value" id="stVoice">-</div></div>
+
+    <div class="card">
+      <div class="label">مصرف RAM</div>
+      <div class="value" id="stRam">-</div>
+      <div class="progress-bar"><div class="progress-fill" id="ramBar" style="width:0%"></div></div>
+    </div>
+    <div class="card">
+      <div class="label">مصرف CPU</div>
+      <div class="value" id="stCpu">-</div>
+      <div class="progress-bar"><div class="progress-fill" id="cpuBar" style="width:0%"></div></div>
+    </div>
+
+    <div class="card">
+      <div class="label">وضعیت سرور</div>
+      <div id="stServerBadge"></div>
+      <div class="conn-hint" id="stUptime"></div>
+    </div>
+    <div class="card">
+      <div class="label">وضعیت دیتابیس</div>
+      <div id="stDbBadge"></div>
+    </div>
+    <div class="card">
+      <div class="label">وضعیت WebSocket</div>
+      <div id="stWsBadge"></div>
+      <div class="conn-hint" id="stWsConn"></div>
+    </div>
+  </div>
+
+  <div class="charts">
+    <div class="chart-card">
+      <div class="label">نمودار پیام‌ها (۲۴ ساعت گذشته)</div>
+      <canvas id="messagesChart" width="600" height="160"></canvas>
+    </div>
+    <div class="chart-card">
+      <div class="label">نمودار فعالیت کاربران (۲۴ ساعت گذشته)</div>
+      <canvas id="activityChart" width="600" height="160"></canvas>
+    </div>
+  </div>
+
+  <!-- ===================== User moderation ===================== -->
+  <div class="panel">
+    <h2>مدیریت کاربر</h2>
+
+    <div class="row">
+      <input class="field grow" id="userLookupPhone" placeholder="شماره تلفن کاربر">
+      <button class="btn" id="userLookupBtn">جستجو</button>
+    </div>
+    <div class="msg-line" id="userLookupMsg"></div>
+
+    <div class="user-card" id="userCard">
+      <div class="who" id="userCardName">-</div>
+      <div class="sub" id="userCardPhone">-</div>
+      <div id="userCardTags"></div>
+
+      <div class="row" style="margin-top:12px;">
+        <button class="btn danger small" id="banBtn">Ban</button>
+        <button class="btn good small" id="unbanBtn">Unban</button>
+        <input class="field" id="banReason" placeholder="دلیل بن (اختیاری)" style="max-width:200px;">
+      </div>
+      <div class="row" style="margin-top:8px;">
+        <button class="btn warn small" id="muteBtn">Mute</button>
+        <button class="btn good small" id="unmuteBtn">Unmute</button>
+        <input class="field" id="muteDuration" type="number" min="1" placeholder="مدت میوت (دقیقه، خالی=نامحدود)" style="max-width:220px;">
+      </div>
+      <div class="row" style="margin-top:8px;">
+        <button class="btn ghost small" id="viewMessagesBtn">مشاهده پیام‌ها</button>
+      </div>
+      <div class="msg-line" id="userActionMsg"></div>
+
+      <div class="msg-list" id="userMessages"></div>
+    </div>
+  </div>
+
+  <!-- ===================== Admin management ===================== -->
+  <div class="panel">
+    <h2>مدیریت ادمین‌ها</h2>
+
+    <h3>افزودن ادمین</h3>
+    <div class="row">
+      <input class="field grow" id="addAdminPhone" placeholder="شماره تلفن کاربر">
+      <button class="btn" id="addAdminBtn">افزودن ادمین</button>
+    </div>
+    <div class="msg-line" id="addAdminMsg"></div>
+
+    <h3>لیست ادمین‌ها</h3>
+    <table class="admins">
+      <thead>
+        <tr>
+          <th>نام</th>
+          <th>تلفن</th>
+          <th>سطح دسترسی</th>
+          <th>وضعیت آنلاین</th>
+          <th>مخفی‌سازی</th>
+          <th>حذف</th>
+        </tr>
+      </thead>
+      <tbody id="adminsTableBody"></tbody>
+    </table>
+    <div class="empty-hint" id="adminsEmptyHint" style="display:none;">ادمینی ثبت نشده است.</div>
+    <div class="msg-line" id="adminsListMsg"></div>
+  </div>
+
+  <!-- ===================== Upload size limits ===================== -->
+  <div class="panel">
+    <h2>محدودیت حجم آپلود</h2>
+    <div id="uploadLimitsRows"></div>
+    <div class="msg-line" id="uploadLimitsMsg"></div>
+  </div>
+
+  <!-- ===================== Global broadcast (super admin) ===================== -->
+  <div class="panel" id="superAdminOnlyHint" style="display:none;">
+    <div class="empty-hint">بخش‌های زیر فقط برای سوپر ادمین قابل مشاهده است.</div>
+  </div>
+
+  <div class="panel hidden" id="broadcastPanel">
+    <h2>اعلان سراسری</h2>
+    <div class="row" style="flex-direction:column; align-items:stretch;">
+      <input class="field" id="broadcastTitle" placeholder="عنوان اعلان">
+      <textarea class="field" id="broadcastBody" placeholder="متن اعلان (اختیاری)" rows="3" style="resize:vertical; font-family:inherit;"></textarea>
+      <div class="row">
+        <button class="btn" id="broadcastSendBtn">ارسال برای همه کاربران</button>
+      </div>
+    </div>
+    <div class="msg-line" id="broadcastMsg"></div>
+  </div>
+
+  <!-- ===================== Database backup ===================== -->
+  <div class="panel hidden" id="backupPanel">
+    <h2>بکاپ دیتابیس</h2>
+
+    <div class="row">
+      <button class="btn" id="createBackupBtn">ساخت بکاپ جدید</button>
+    </div>
+    <div class="msg-line" id="backupMsg"></div>
+
+    <h3>لیست بکاپ‌ها</h3>
+    <table class="admins">
+      <thead>
+        <tr><th>نام فایل</th><th>حجم</th><th>تاریخ</th><th>دانلود</th><th>حذف</th></tr>
+      </thead>
+      <tbody id="backupsTableBody"></tbody>
+    </table>
+    <div class="empty-hint" id="backupsEmptyHint" style="display:none;">هنوز بکاپی ساخته نشده است.</div>
+
+    <h3>بازگردانی بکاپ (Restore)</h3>
+    <div class="msg-line err" style="margin-bottom:8px;">
+      ⚠️ بازگردانی، دیتابیس فعلی را با فایل انتخابی جایگزین می‌کند و سرور را ری‌استارت می‌کند. این کار غیرقابل بازگشت است (یک بکاپ خودکار از وضعیت فعلی قبل از جایگزینی گرفته می‌شود).
+    </div>
+    <div class="row">
+      <input type="file" class="field grow" id="restoreFileInput" accept=".db">
+      <button class="btn danger" id="restoreBtn">بازگردانی</button>
+    </div>
+    <div class="msg-line" id="restoreMsg"></div>
+  </div>
+
+  <!-- ===================== Rooms browser ===================== -->
+  <div class="panel hidden" id="roomsPanel">
+    <h2>لیست روم‌ها</h2>
+    <div class="row">
+      <input class="field grow" id="roomSearchInput" placeholder="جستجوی نام روم...">
+      <button class="btn" id="roomSearchBtn">جستجو</button>
+    </div>
+    <div class="msg-line" id="roomsMsg"></div>
+
+    <table class="admins">
+      <thead>
+        <tr><th>نام روم</th><th>نوع</th><th>اعضا</th><th>تعداد پیام</th><th>مشاهده</th></tr>
+      </thead>
+      <tbody id="roomsTableBody"></tbody>
+    </table>
+    <div class="empty-hint" id="roomsEmptyHint" style="display:none;">روومی یافت نشد.</div>
+
+    <div id="roomMessagesWrap" style="display:none; margin-top:14px;">
+      <h3 id="roomMessagesTitle">پیام‌های روم</h3>
+      <div class="msg-list show" id="roomMessagesList"></div>
+    </div>
+  </div>
+
+  <!-- ===================== Users -> chats -> messages ===================== -->
+  <div class="panel hidden" id="userChatsPanel">
+    <h2>مشاهده چت‌های کاربران</h2>
+
+    <h3>۱. انتخاب کاربر</h3>
+    <div class="row">
+      <input class="field grow" id="chatUserSearchInput" placeholder="جستجوی نام یا شماره تلفن...">
+      <button class="btn" id="chatUserSearchBtn">جستجو</button>
+    </div>
+    <div class="msg-line" id="chatUsersMsg"></div>
+    <table class="admins">
+      <thead><tr><th>نام</th><th>تلفن</th><th>انتخاب</th></tr></thead>
+      <tbody id="chatUsersTableBody"></tbody>
+    </table>
+    <div class="empty-hint" id="chatUsersEmptyHint" style="display:none;">کاربری یافت نشد.</div>
+
+    <div id="userChatsWrap" style="display:none; margin-top:14px;">
+      <h3>۲. لیست چت‌های <span id="userChatsForName"></span></h3>
+      <div class="row" id="userChatsList" style="align-items:stretch;"></div>
+      <div class="empty-hint" id="userChatsEmptyHint" style="display:none;">این کاربر هیچ چتی ندارد.</div>
+    </div>
+
+    <div id="userChatMessagesWrap" style="display:none; margin-top:14px;">
+      <h3>۳. پیام‌های <span id="userChatMessagesTitle"></span></h3>
+      <div class="msg-list show" id="userChatMessagesList"></div>
+    </div>
+  </div>
+</div>
+
+<template id="uploadLimitRowTpl">
+  <div class="row" style="margin-bottom:10px; align-items:center;">
+    <div style="min-width:70px; font-size:13.5px;" data-role="label"></div>
+    <input class="field" type="number" min="1" max="500" style="max-width:110px;" data-role="input">
+    <span style="font-size:12px; color:var(--muted);">مگابایت</span>
+    <button class="btn small" data-role="save">ذخیره</button>
+    <button class="btn ghost small" data-role="reset">پیش‌فرض</button>
+    <span class="tag clean" data-role="default-tag" style="display:none;">پیش‌فرض (.env)</span>
+  </div>
+</template>
+
+<script>
+  const el = (id) => document.getElementById(id);
+  const loginScreen = el('loginScreen');
+  const dashboard = el('dashboard');
+  let token = localStorage.getItem('chat_token');
+  let socket = null;
+
+  function fmtNum(n){ return new Intl.NumberFormat('fa-IR').format(n); }
+
+  async function login() {
+    el('loginError').textContent = '';
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: el('phoneInput').value.trim(), password: el('passwordInput').value })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'ورود ناموفق بود');
+      token = data.token;
+      localStorage.setItem('chat_token', token);
+      localStorage.setItem('chat_user', JSON.stringify(data.user));
+      connect();
+    } catch (e) {
+      el('loginError').textContent = e.message;
+    }
+  }
+  el('loginBtn').addEventListener('click', login);
+  el('passwordInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') login(); });
+
+  function showLogin() {
+    loginScreen.classList.remove('hidden');
+    dashboard.classList.add('hidden');
+  }
+  function showDashboard() {
+    loginScreen.classList.add('hidden');
+    dashboard.classList.remove('hidden');
+  }
+
+  function badge(ok, okText, failText) {
+    return `<span class="badge ${ok ? 'ok' : 'fail'}"><span class="dot"></span>${ok ? okText : failText}</span>`;
+  }
+
+  function fmtUptime(seconds) {
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    return `${fmtNum(h)} ساعت و ${fmtNum(m)} دقیقه`;
+  }
+
+  function drawChart(canvas, labels, values) {
+    const ctx = canvas.getContext('2d');
+    const w = canvas.width, h = canvas.height;
+    ctx.clearRect(0, 0, w, h);
+    const max = Math.max(1, ...values);
+    const padL = 6, padR = 6, padB = 16, padT = 8;
+    const plotW = w - padL - padR;
+    const plotH = h - padT - padB;
+    const barW = plotW / values.length;
+
+    ctx.fillStyle = 'rgba(63,169,245,0.7)';
+    values.forEach((v, i) => {
+      const barH = (v / max) * plotH;
+      const x = padL + i * barW;
+      const y = padT + (plotH - barH);
+      ctx.fillRect(x + 1, y, Math.max(barW - 2, 1), barH);
+    });
+
+    ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+    ctx.beginPath();
+    ctx.moveTo(padL, padT + plotH);
+    ctx.lineTo(w - padR, padT + plotH);
+    ctx.stroke();
+
+    ctx.fillStyle = '#8B8D97';
+    ctx.font = '9px Vazirmatn, sans-serif';
+    ctx.textAlign = 'center';
+    [0, Math.floor(values.length / 2), values.length - 1].forEach((i) => {
+      if (labels[i] === undefined) return;
+      ctx.fillText(labels[i], padL + i * barW + barW / 2, h - 3);
+    });
+  }
+
+  function applySnapshot(s) {
+    el('jalaliDate').textContent = s.date.full;
+
+    el('stOnline').textContent = fmtNum(s.counts.onlineUsers);
+    el('stOffline').textContent = fmtNum(s.counts.offlineUsers);
+    el('stUsers').textContent = fmtNum(s.counts.totalUsers);
+    el('stAdmins').textContent = fmtNum(s.counts.totalAdmins);
+    el('stRooms').textContent = fmtNum(s.counts.totalRooms);
+    el('stMessages').textContent = fmtNum(s.counts.totalMessages);
+    el('stFiles').textContent = fmtNum(s.counts.totalFiles);
+    el('stVoice').textContent = fmtNum(s.counts.totalVoiceMessages);
+
+    el('stRam').textContent = `${s.system.ram.usedPercent}% (${fmtNum(s.system.ram.usedMb)}MB / ${fmtNum(s.system.ram.totalMb)}MB)`;
+    const ramBar = el('ramBar');
+    ramBar.style.width = `${s.system.ram.usedPercent}%`;
+    ramBar.className = 'progress-fill' + (s.system.ram.usedPercent > 85 ? ' bad' : s.system.ram.usedPercent > 65 ? ' warn' : '');
+
+    el('stCpu').textContent = `${s.system.cpuPercent}%`;
+    const cpuBar = el('cpuBar');
+    cpuBar.style.width = `${s.system.cpuPercent}%`;
+    cpuBar.className = 'progress-fill' + (s.system.cpuPercent > 85 ? ' bad' : s.system.cpuPercent > 65 ? ' warn' : '');
+
+    el('stServerBadge').innerHTML = badge(s.status.server.ok, 'آنلاین', 'قطع');
+    el('stUptime').textContent = `آپ‌تایم: ${fmtUptime(s.system.server.uptimeSeconds)}`;
+    el('stDbBadge').innerHTML = badge(s.status.database.ok, 'متصل', 'قطع');
+    el('stWsBadge').innerHTML = badge(s.status.websocket.ok, 'فعال', 'قطع');
+    el('stWsConn').textContent = `اتصالات فعال: ${fmtNum(s.status.websocket.connections)}`;
+
+    drawChart(el('messagesChart'), s.charts.messages.labels, s.charts.messages.values);
+    drawChart(el('activityChart'), s.charts.userActivity.labels, s.charts.userActivity.values);
+  }
+
+  /* ===================== Admin panel logic ===================== */
+  async function apiFetch(path, opts = {}) {
+    const res = await fetch(path, {
+      ...opts,
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+        ...(opts.headers || {})
+      }
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'خطایی رخ داد');
+    return data;
+  }
+
+  function setMsg(id, text, ok) {
+    const node = el(id);
+    node.textContent = text || '';
+    node.className = 'msg-line' + (text ? (ok ? ' ok' : ' err') : '');
+  }
+
+  function escapeHtml(str) {
+    return String(str).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  }
+
+  /* ---- User moderation: ban / unban / mute / unmute / view messages ---- */
+  let currentUser = null;
+
+  function renderUserCard(u) {
+    currentUser = u;
+    el('userCard').classList.add('show');
+    el('userCardName').textContent = u.name;
+    el('userCardPhone').textContent = u.phone;
+    const tags = [];
+    if (u.banned) tags.push(`<span class="tag banned">بن‌شده${u.banReason ? ' — ' + escapeHtml(u.banReason) : ''}</span>`);
+    if (u.muted) tags.push(`<span class="tag muted">میوت${u.mutedUntil ? ' تا ' + new Date(u.mutedUntil).toLocaleString('fa-IR') : ' (نامحدود)'}</span>`);
+    if (!u.banned && !u.muted) tags.push('<span class="tag clean">بدون محدودیت</span>');
+    el('userCardTags').innerHTML = tags.join('');
+    el('userMessages').classList.remove('show');
+    el('userMessages').innerHTML = '';
+    setMsg('userActionMsg', '', true);
+  }
+
+  el('userLookupBtn').addEventListener('click', async () => {
+    setMsg('userLookupMsg', '', true);
+    const phone = el('userLookupPhone').value.trim();
+    if (!phone) return setMsg('userLookupMsg', 'شماره تلفن را وارد کنید', false);
+    try {
+      const u = await apiFetch(`/api/admin/users/lookup?phone=${encodeURIComponent(phone)}`);
+      renderUserCard(u);
+    } catch (e) {
+      el('userCard').classList.remove('show');
+      currentUser = null;
+      setMsg('userLookupMsg', e.message, false);
+    }
+  });
+
+  async function userAction(path, opts) {
+    if (!currentUser) return;
+    try {
+      const u = await apiFetch(`/api/admin/users/${currentUser.id}${path}`, opts);
+      renderUserCard(u);
+      setMsg('userActionMsg', 'انجام شد', true);
+    } catch (e) {
+      setMsg('userActionMsg', e.message, false);
+    }
+  }
+
+  el('banBtn').addEventListener('click', () =>
+    userAction('/ban', { method: 'POST', body: JSON.stringify({ reason: el('banReason').value.trim() || undefined }) })
+  );
+  el('unbanBtn').addEventListener('click', () => userAction('/unban', { method: 'POST' }));
+  el('muteBtn').addEventListener('click', () => {
+    const mins = parseInt(el('muteDuration').value, 10);
+    userAction('/mute', {
+      method: 'POST',
+      body: JSON.stringify({ durationMinutes: Number.isFinite(mins) ? mins : undefined })
+    });
+  });
+  el('unmuteBtn').addEventListener('click', () => userAction('/unmute', { method: 'POST' }));
+
+  el('viewMessagesBtn').addEventListener('click', async () => {
+    if (!currentUser) return;
+    try {
+      const messages = await apiFetch(`/api/admin/users/${currentUser.id}/messages?limit=50`);
+      const list = el('userMessages');
+      list.classList.add('show');
+      if (!messages.length) {
+        list.innerHTML = '<div class="empty-hint">پیامی یافت نشد.</div>';
+      } else {
+        list.innerHTML = messages
+          .map((m) => {
+            const where = m.group_name ? `گروه: ${escapeHtml(m.group_name)}` : 'پیام خصوصی';
+            const when = new Date(m.created_at.replace(' ', 'T') + 'Z').toLocaleString('fa-IR');
+            const body = messageBodyText(m);
+            const media = messageMediaHtml(m);
+            return `<div class="msg-item${m.deleted_at ? ' deleted' : ''}"><div class="meta">${where} · ${when}</div>${media}${body ? `<div>${body}</div>` : ''}</div>`;
+          })
+          .join('');
+        resolveMessageMedia(list, '/api/admin');
+      }
+    } catch (e) {
+      setMsg('userActionMsg', e.message, false);
+    }
+  });
+
+  /* ---- Admin management: add / remove / list / access level / hide presence ---- */
+  el('addAdminBtn').addEventListener('click', async () => {
+    setMsg('addAdminMsg', '', true);
+    const phone = el('addAdminPhone').value.trim();
+    if (!phone) return setMsg('addAdminMsg', 'شماره تلفن را وارد کنید', false);
+    try {
+      const found = await apiFetch(`/api/admin/users/lookup?phone=${encodeURIComponent(phone)}`);
+      await apiFetch('/api/admin/admins', { method: 'POST', body: JSON.stringify({ userId: found.id }) });
+      setMsg('addAdminMsg', 'ادمین اضافه شد', true);
+      el('addAdminPhone').value = '';
+      loadAdmins();
+    } catch (e) {
+      setMsg('addAdminMsg', e.message, false);
+    }
+  });
+
+  async function loadAdmins() {
+    setMsg('adminsListMsg', '', true);
+    try {
+      const admins = await apiFetch('/api/admin/admins');
+      const body = el('adminsTableBody');
+      el('adminsEmptyHint').style.display = admins.length ? 'none' : 'block';
+
+      body.innerHTML = admins
+        .map((a) => {
+          const level = a.roles.includes('super_admin') ? 'super_admin' : 'admin';
+          return `
+            <tr data-id="${a.id}">
+              <td>${escapeHtml(a.name)}</td>
+              <td>${escapeHtml(a.phone)}</td>
+              <td>
+                <select class="field access-level-select">
+                  <option value="admin" ${level === 'admin' ? 'selected' : ''}>ادمین</option>
+                  <option value="super_admin" ${level === 'super_admin' ? 'selected' : ''}>سوپر ادمین</option>
+                </select>
+              </td>
+              <td><span class="online-dot ${a.online ? 'on' : 'off'}"><span class="d"></span>${a.online ? 'آنلاین' : 'آفلاین'}</span></td>
+              <td><button class="btn ghost small hide-toggle-btn">${a.hideOnlineStatus ? 'نمایش وضعیت' : 'مخفی کردن وضعیت'}</button></td>
+              <td><button class="btn danger small remove-admin-btn">حذف</button></td>
+            </tr>
+          `;
+        })
+        .join('');
+
+      body.querySelectorAll('tr').forEach((row) => {
+        const id = row.dataset.id;
+
+        row.querySelector('.access-level-select').addEventListener('change', async (e) => {
+          try {
+            await apiFetch(`/api/admin/admins/${id}/access-level`, {
+              method: 'PATCH',
+              body: JSON.stringify({ level: e.target.value })
+            });
+            setMsg('adminsListMsg', 'سطح دسترسی تغییر کرد', true);
+          } catch (err) {
+            setMsg('adminsListMsg', err.message, false);
+            loadAdmins();
+          }
+        });
+
+        row.querySelector('.hide-toggle-btn').addEventListener('click', async () => {
+          const currentlyHidden = row.querySelector('.hide-toggle-btn').textContent.trim() === 'نمایش وضعیت';
+          try {
+            await apiFetch(`/api/admin/admins/${id}/hide-presence`, {
+              method: 'PATCH',
+              body: JSON.stringify({ hidden: !currentlyHidden })
+            });
+            loadAdmins();
+          } catch (err) {
+            setMsg('adminsListMsg', err.message, false);
+          }
+        });
+
+        row.querySelector('.remove-admin-btn').addEventListener('click', async () => {
+          if (!confirm('این ادمین حذف شود؟')) return;
+          try {
+            await apiFetch(`/api/admin/admins/${id}`, { method: 'DELETE' });
+            loadAdmins();
+          } catch (err) {
+            setMsg('adminsListMsg', err.message, false);
+          }
+        });
+      });
+    } catch (e) {
+      setMsg('adminsListMsg', e.message, false);
+    }
+  }
+
+  const CATEGORY_LABELS = { file: 'فایل', image: 'تصویر', voice: 'ویس', video: 'ویدیو' };
+
+  async function loadUploadLimits() {
+    setMsg('uploadLimitsMsg', '', true);
+    try {
+      const limits = await apiFetch('/api/admin/settings/upload-limits');
+      const container = el('uploadLimitsRows');
+      const tpl = el('uploadLimitRowTpl');
+      container.innerHTML = '';
+
+      Object.keys(limits).forEach((category) => {
+        const info = limits[category];
+        const node = tpl.content.cloneNode(true);
+        const row = node.querySelector('.row');
+        row.querySelector('[data-role="label"]').textContent = CATEGORY_LABELS[category] || category;
+        const input = row.querySelector('[data-role="input"]');
+        input.value = info.maxSizeMb;
+        row.querySelector('[data-role="default-tag"]').style.display = info.isDefault ? 'inline-flex' : 'none';
+
+        row.querySelector('[data-role="save"]').addEventListener('click', async () => {
+          const value = Number(input.value);
+          if (!value || value < 1 || value > 500) {
+            return setMsg('uploadLimitsMsg', 'مقدار باید بین ۱ تا ۵۰۰ مگابایت باشد', false);
+          }
+          try {
+            await apiFetch('/api/admin/settings/upload-limits', {
+              method: 'PATCH',
+              body: JSON.stringify({ [category]: value })
+            });
+            setMsg('uploadLimitsMsg', 'محدودیت ذخیره شد', true);
+            loadUploadLimits();
+          } catch (err) {
+            setMsg('uploadLimitsMsg', err.message, false);
+          }
+        });
+
+        row.querySelector('[data-role="reset"]').addEventListener('click', async () => {
+          try {
+            await apiFetch(`/api/admin/settings/upload-limits/${category}`, { method: 'DELETE' });
+            setMsg('uploadLimitsMsg', 'به مقدار پیش‌فرض بازگشت', true);
+            loadUploadLimits();
+          } catch (err) {
+            setMsg('uploadLimitsMsg', err.message, false);
+          }
+        });
+
+        container.appendChild(node);
+      });
+    } catch (e) {
+      setMsg('uploadLimitsMsg', e.message, false);
+    }
+  }
+
+  /* ===================== Super-admin console ===================== */
+  // Visibility of these panels is decided by an actual API call (not by
+  // guessing from the JWT), so it always matches what the server will
+  // really allow — a plain 'admin' just sees the "super admin only" hint.
+  async function initSuperAdminSections() {
+    try {
+      await apiFetch('/api/superadmin/backup');
+      ['broadcastPanel', 'backupPanel', 'roomsPanel', 'userChatsPanel'].forEach((id) => el(id).classList.remove('hidden'));
+      el('superAdminOnlyHint').style.display = 'none';
+      loadBackups();
+      loadRooms();
+    } catch (e) {
+      el('superAdminOnlyHint').style.display = 'block';
+    }
+  }
+
+  function fmtBytes(n) {
+    if (n < 1024) return `${n} بایت`;
+    if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} کیلوبایت`;
+    return `${(n / (1024 * 1024)).toFixed(1)} مگابایت`;
+  }
+  function fmtDate(iso) {
+    return new Date(iso).toLocaleString('fa-IR');
+  }
+
+  /* ---- Broadcast ---- */
+  el('broadcastSendBtn').addEventListener('click', async () => {
+    const title = el('broadcastTitle').value.trim();
+    const body = el('broadcastBody').value.trim();
+    if (!title) return setMsg('broadcastMsg', 'عنوان را وارد کنید', false);
+    if (!confirm('این اعلان برای همه کاربران ارسال می‌شود. ادامه می‌دهید؟')) return;
+    try {
+      const res = await apiFetch('/api/superadmin/broadcast', {
+        method: 'POST',
+        body: JSON.stringify({ title, body: body || undefined })
+      });
+      setMsg('broadcastMsg', `اعلان برای ${fmtNum(res.recipients)} کاربر ارسال شد`, true);
+      el('broadcastTitle').value = '';
+      el('broadcastBody').value = '';
+    } catch (e) {
+      setMsg('broadcastMsg', e.message, false);
+    }
+  });
+
+  /* ---- Backup / restore ---- */
+  async function loadBackups() {
+    setMsg('backupMsg', '', true);
+    try {
+      const backups = await apiFetch('/api/superadmin/backup');
+      const body = el('backupsTableBody');
+      el('backupsEmptyHint').style.display = backups.length ? 'none' : 'block';
+      body.innerHTML = backups
+        .map(
+          (b) => `
+            <tr data-filename="${escapeHtml(b.filename)}">
+              <td>${escapeHtml(b.filename)}</td>
+              <td>${fmtBytes(b.sizeBytes)}</td>
+              <td>${fmtDate(b.createdAt)}</td>
+              <td><button class="btn small ghost download-backup-btn">دانلود</button></td>
+              <td><button class="btn small danger delete-backup-btn">حذف</button></td>
+            </tr>
+          `
+        )
+        .join('');
+
+      body.querySelectorAll('tr').forEach((row) => {
+        const filename = row.dataset.filename;
+        row.querySelector('.download-backup-btn').addEventListener('click', async () => {
+          try {
+            const res = await fetch(`/api/superadmin/backup/${encodeURIComponent(filename)}/download`, {
+              headers: { Authorization: `Bearer ${token}` }
+            });
+            if (!res.ok) throw new Error('دانلود ناموفق بود');
+            const blob = await res.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(url);
+          } catch (e) {
+            setMsg('backupMsg', e.message, false);
+          }
+        });
+        row.querySelector('.delete-backup-btn').addEventListener('click', async () => {
+          if (!confirm(`بکاپ «${filename}» حذف شود؟`)) return;
+          try {
+            await apiFetch(`/api/superadmin/backup/${encodeURIComponent(filename)}`, { method: 'DELETE' });
+            loadBackups();
+          } catch (e) {
+            setMsg('backupMsg', e.message, false);
+          }
+        });
+      });
+    } catch (e) {
+      setMsg('backupMsg', e.message, false);
+    }
+  }
+
+  el('createBackupBtn').addEventListener('click', async () => {
+    setMsg('backupMsg', 'در حال ساخت بکاپ...', true);
+    try {
+      const info = await apiFetch('/api/superadmin/backup', { method: 'POST' });
+      setMsg('backupMsg', `بکاپ «${info.filename}» ساخته شد`, true);
+      loadBackups();
+    } catch (e) {
+      setMsg('backupMsg', e.message, false);
+    }
+  });
+
+  el('restoreBtn').addEventListener('click', async () => {
+    const file = el('restoreFileInput').files[0];
+    if (!file) return setMsg('restoreMsg', 'یک فایل .db انتخاب کنید', false);
+    if (!confirm('دیتابیس فعلی جایگزین می‌شود و سرور ری‌استارت می‌شود. مطمئن هستید؟')) return;
+
+    setMsg('restoreMsg', 'در حال آپلود و بازگردانی...', true);
+    try {
+      const form = new FormData();
+      form.append('backup', file);
+      const res = await fetch('/api/superadmin/backup/restore', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: form
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'بازگردانی ناموفق بود');
+      setMsg('restoreMsg', data.message || 'بازگردانی انجام شد. سرور در حال ری‌استارت است...', true);
+      el('restoreFileInput').value = '';
+    } catch (e) {
+      setMsg('restoreMsg', e.message, false);
+    }
+  });
+
+  /* ---- Rooms browser ---- */
+  async function loadRooms(search) {
+    setMsg('roomsMsg', '', true);
+    try {
+      const q = search ? `?search=${encodeURIComponent(search)}` : '';
+      const { rooms } = await apiFetch(`/api/superadmin/rooms${q}`);
+      const body = el('roomsTableBody');
+      el('roomsEmptyHint').style.display = rooms.length ? 'none' : 'block';
+      body.innerHTML = rooms
+        .map(
+          (r) => `
+            <tr data-id="${r.id}" data-name="${escapeHtml(r.name)}">
+              <td>${escapeHtml(r.name)}</td>
+              <td>${escapeHtml(r.type)}</td>
+              <td>${fmtNum(r.memberCount)}</td>
+              <td>${fmtNum(r.messageCount)}</td>
+              <td><button class="btn small ghost view-room-messages-btn">مشاهده پیام‌ها</button></td>
+            </tr>
+          `
+        )
+        .join('');
+
+      body.querySelectorAll('.view-room-messages-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const row = btn.closest('tr');
+          showChatMessages('group', row.dataset.id, row.dataset.name, 'roomMessagesWrap', 'roomMessagesTitle', 'roomMessagesList');
+        });
+      });
+    } catch (e) {
+      setMsg('roomsMsg', e.message, false);
+    }
+  }
+
+  el('roomSearchBtn').addEventListener('click', () => loadRooms(el('roomSearchInput').value.trim()));
+  el('roomSearchInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') loadRooms(el('roomSearchInput').value.trim()); });
+
+  /* ---- Shared: render messages for a chat (group or dm) into a target list ---- */
+
+  // Builds a placeholder (or, for stickers, the final markup) for a
+  // message's media so real messages show the actual picture/voice/video/
+  // file/sticker instead of just a "📷 عکس"-style text label. Image/voice/
+  // video/file placeholders are filled in afterwards by resolveMessageMedia,
+  // since fetching a real (signed, decrypted) link requires an API call.
+  function messageMediaHtml(m) {
+    if (m.deleted_at) return '';
+    if (m.message_type === 'sticker' && m.sticker_id) {
+      return `<div class="msg-media"><img class="msg-media-img" src="/api/stickers/file/${m.sticker_id}" alt="استیکر" loading="lazy"></div>`;
+    }
+    if (!m.upload_id) return '';
+    if (m.message_type === 'image') {
+      return `<div class="msg-media" data-upload-id="${m.upload_id}" data-kind="image"><div class="msg-media-loading">در حال بارگذاری تصویر...</div></div>`;
+    }
+    if (m.message_type === 'voice') {
+      return `<div class="msg-media" data-upload-id="${m.upload_id}" data-kind="voice"><div class="msg-media-loading">در حال بارگذاری صدا...</div></div>`;
+    }
+    if (m.message_type === 'video') {
+      return `<div class="msg-media" data-upload-id="${m.upload_id}" data-kind="video"><div class="msg-media-loading">در حال بارگذاری ویدیو...</div></div>`;
+    }
+    if (m.message_type === 'file') {
+      const sizeKb = m.upload_size ? Math.round(m.upload_size / 1024) : null;
+      return `
+        <div class="msg-media-file" data-upload-id="${m.upload_id}" data-kind="file">
+          <span class="msg-media-file-icon">📎</span>
+          <span class="msg-media-file-name">${escapeHtml(m.upload_name || 'فایل')}</span>
+          ${sizeKb ? `<span class="msg-media-file-size">${sizeKb} KB</span>` : ''}
+          <a class="msg-media-file-dl" href="#" target="_blank" rel="noopener">دانلود</a>
+        </div>`;
+    }
+    return '';
+  }
+
+  // Fills in every unresolved media placeholder inside `root` by asking
+  // the admin-only signed-link endpoint for each upload_id. `linkBase` is
+  // '/api/admin' for the moderation user-messages view or '/api/superadmin'
+  // for the rooms/DMs browser — both expose an equivalent /uploads/:id/link.
+  async function resolveMessageMedia(root, linkBase) {
+    const nodes = root.querySelectorAll('[data-upload-id]');
+    for (const node of nodes) {
+      const uploadId = node.getAttribute('data-upload-id');
+      const kind = node.getAttribute('data-kind');
+      try {
+        const inline = kind === 'file' ? '' : '?inline=1';
+        const { url } = await apiFetch(`${linkBase}/uploads/${uploadId}/link${inline}`);
+        if (kind === 'image') {
+          node.innerHTML = `<img class="msg-media-img" src="${url}" alt="تصویر" loading="lazy">`;
+        } else if (kind === 'voice') {
+          node.innerHTML = `<audio controls preload="metadata" src="${url}" class="msg-media-audio"></audio>`;
+        } else if (kind === 'video') {
+          node.innerHTML = `<video controls preload="metadata" playsinline src="${url}" class="msg-media-video"></video>`;
+        } else if (kind === 'file') {
+          const dl = node.querySelector('.msg-media-file-dl');
+          if (dl) dl.href = url;
+        }
+      } catch (e) {
+        node.innerHTML = '<div class="msg-media-error">خطا در بارگذاری فایل</div>';
+      }
+    }
+  }
+
+  // For text messages, show the preview/content label. For media messages,
+  // the media itself already conveys the type, so only show real caption
+  // text (m.content) if the sender actually typed one alongside it.
+  function messageBodyText(m) {
+    if (m.deleted_at) return '(حذف شده)';
+    const hasMedia = (m.message_type === 'sticker' && m.sticker_id) || ((m.message_type === 'image' || m.message_type === 'voice' || m.message_type === 'video' || m.message_type === 'file') && m.upload_id);
+    if (hasMedia) return m.content ? escapeHtml(m.content) : '';
+    return escapeHtml(m.preview || m.content);
+  }
+
+  function renderMessageItem(m) {
+    const when = fmtDate(m.created_at.replace(' ', 'T') + 'Z');
+    const body = messageBodyText(m);
+    const media = messageMediaHtml(m);
+    return `<div class="msg-item${m.deleted_at ? ' deleted' : ''}"><div class="meta"><span class="who">${escapeHtml(m.sender_name)}</span> · <span class="when">${when}</span></div>${media}${body ? `<div>${body}</div>` : ''}</div>`;
+  }
+
+  // Two-way DM view: messages already come back in chronological order from
+  // the API. Bubbles are aligned by sender so the back-and-forth reads like
+  // an actual conversation — sideA (the user picked in step 1) on the
+  // right, sideB (the other participant) on the left.
+  function renderConvoMessages(messages, sideAId, sideAName, sideBId, sideBName) {
+    const legend = `
+      <div class="convo-legend">
+        <span><span class="dot" style="background:#3FA9F5;"></span>${escapeHtml(sideAName)}</span>
+        <span><span class="dot" style="background:#8B8D97;"></span>${escapeHtml(sideBName)}</span>
+      </div>
+    `;
+    const rows = messages
+      .map((m) => {
+        const isA = m.sender_id === sideAId;
+        const when = fmtDate(m.created_at.replace(' ', 'T') + 'Z');
+        const body = messageBodyText(m);
+        const media = messageMediaHtml(m);
+        return `
+          <div class="convo-row ${isA ? 'side-a' : 'side-b'}">
+            <div class="convo-bubble${m.deleted_at ? ' deleted' : ''}">
+              <div class="meta"><span class="who">${escapeHtml(m.sender_name)}</span> · <span class="when">${when}</span></div>
+              ${media}${body ? `<div>${body}</div>` : ''}
+            </div>
+          </div>
+        `;
+      })
+      .join('');
+    return legend + rows;
+  }
+
+  // dmParticipants (optional): { aId, aName, bId, bName } — when given, the
+  // chat is rendered as a two-sided conversation instead of a flat list.
+  async function showChatMessages(type, id, label, wrapId, titleId, listId, dmParticipants) {
+    el(wrapId).style.display = 'block';
+    el(titleId).textContent = label ? `پیام‌های «${label}»` : 'پیام‌ها';
+    el(listId).innerHTML = '<div class="empty-hint">در حال بارگذاری...</div>';
+    try {
+      const messages = await apiFetch(`/api/superadmin/chats/${type}/${id}/messages?limit=50`);
+      if (!messages.length) {
+        el(listId).innerHTML = '<div class="empty-hint">پیامی یافت نشد.</div>';
+      } else if (dmParticipants) {
+        el(listId).innerHTML = renderConvoMessages(
+          messages, dmParticipants.aId, dmParticipants.aName, dmParticipants.bId, dmParticipants.bName
+        );
+        resolveMessageMedia(el(listId), '/api/superadmin');
+      } else {
+        el(listId).innerHTML = messages.map(renderMessageItem).join('');
+        resolveMessageMedia(el(listId), '/api/superadmin');
+      }
+    } catch (e) {
+      el(listId).innerHTML = `<div class="empty-hint">${escapeHtml(e.message)}</div>`;
+    }
+  }
+
+  /* ---- Users -> chats -> messages ---- */
+  async function loadChatUsers(search) {
+    setMsg('chatUsersMsg', '', true);
+    try {
+      const q = search ? `?search=${encodeURIComponent(search)}` : '';
+      const { users } = await apiFetch(`/api/superadmin/users${q}`);
+      const body = el('chatUsersTableBody');
+      el('chatUsersEmptyHint').style.display = users.length ? 'none' : 'block';
+      body.innerHTML = users
+        .map(
+          (u) => `
+            <tr data-id="${u.id}" data-name="${escapeHtml(u.name)}">
+              <td>${escapeHtml(u.name)}</td>
+              <td>${escapeHtml(u.phone)}</td>
+              <td><button class="btn small ghost select-chat-user-btn">انتخاب</button></td>
+            </tr>
+          `
+        )
+        .join('');
+
+      body.querySelectorAll('.select-chat-user-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const row = btn.closest('tr');
+          loadUserChats(row.dataset.id, row.dataset.name);
+        });
+      });
+    } catch (e) {
+      setMsg('chatUsersMsg', e.message, false);
+    }
+  }
+
+  el('chatUserSearchBtn').addEventListener('click', () => loadChatUsers(el('chatUserSearchInput').value.trim()));
+  el('chatUserSearchInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') loadChatUsers(el('chatUserSearchInput').value.trim()); });
+
+  async function loadUserChats(userId, userName) {
+    el('userChatsWrap').style.display = 'block';
+    el('userChatMessagesWrap').style.display = 'none';
+    el('userChatsForName').textContent = userName;
+    el('userChatsList').innerHTML = '<div class="empty-hint">در حال بارگذاری...</div>';
+    try {
+      const { groups, dms } = await apiFetch(`/api/superadmin/users/${userId}/chats`);
+      const chats = [
+        ...groups.map((g) => ({ chatType: 'group', id: g.id, name: `گروه: ${g.name}` })),
+        ...dms.map((d) => ({
+          chatType: 'dm',
+          id: d.id,
+          name: `پیوی: ${userName} و ${d.name}`,
+          otherUserId: d.otherUserId,
+          otherUserName: d.name
+        }))
+      ];
+      el('userChatsEmptyHint').style.display = chats.length ? 'none' : 'block';
+      el('userChatsList').innerHTML = chats
+        .map((c) => `
+          <button class="btn small ghost select-chat-btn"
+            data-type="${c.chatType}" data-id="${c.id}" data-name="${escapeHtml(c.name)}"
+            ${c.chatType === 'dm' ? `data-other-id="${c.otherUserId}" data-other-name="${escapeHtml(c.otherUserName)}"` : ''}
+          >${escapeHtml(c.name)}</button>
+        `)
+        .join('');
+
+      el('userChatsList').querySelectorAll('.select-chat-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const dmParticipants = btn.dataset.type === 'dm'
+            ? { aId: Number(userId), aName: userName, bId: Number(btn.dataset.otherId), bName: btn.dataset.otherName }
+            : undefined;
+          showChatMessages(
+            btn.dataset.type, btn.dataset.id, btn.dataset.name,
+            'userChatMessagesWrap', 'userChatMessagesTitle', 'userChatMessagesList',
+            dmParticipants
+          );
+        });
+      });
+    } catch (e) {
+      el('userChatsList').innerHTML = `<div class="empty-hint">${escapeHtml(e.message)}</div>`;
+    }
+  }
+
+  function connect() {
+    if (!token) { showLogin(); return; }
+    socket = io('/dashboard', { auth: { token } });
+
+    socket.on('connect', () => { showDashboard(); loadAdmins(); loadUploadLimits(); initSuperAdminSections(); });
+    socket.on('dashboard:stats', applySnapshot);
+    socket.on('connect_error', () => {
+      localStorage.removeItem('chat_token');
+      token = null;
+      showLogin();
+    });
+  }
+
+  connect();
+</script>
+</body>
+</html>
