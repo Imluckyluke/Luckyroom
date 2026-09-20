@@ -8,6 +8,8 @@ const emitter = require('../sockets/emitter');
 const { getLastMessage, isUnread, markRead, previewText, getReadStates } = require('../helpers/chatReads');
 const { getReactionsForMessages } = require('../helpers/reactions');
 const presence = require('../sockets/presence');
+const { escapeLike } = require('../helpers/validation');
+const { findUserByPhone } = require('../helpers/phone');
 
 const router = express.Router();
 router.use(authRequired);
@@ -56,7 +58,7 @@ router.post('/', (req, res) => {
     other = db.prepare('SELECT * FROM users WHERE username = ? COLLATE NOCASE').get(clean);
     if (!other) return res.status(404).json({ error: 'No user with this username' });
   } else {
-    other = db.prepare('SELECT * FROM users WHERE phone = ?').get(phone.trim());
+    other = findUserByPhone(db, phone);
     if (!other) return res.status(404).json({ error: 'No user with this phone number' });
   }
 
@@ -278,10 +280,10 @@ router.get('/:id/messages/search', (req, res) => {
        FROM messages m
        JOIN users u ON u.id = m.sender_id
        LEFT JOIN users pinner ON pinner.id = m.pinned_by
-       WHERE m.conversation_id = ? AND m.id < ? AND m.deleted_at IS NULL AND m.content LIKE ?
+       WHERE m.conversation_id = ? AND m.id < ? AND m.deleted_at IS NULL AND m.content LIKE ? ESCAPE '\\'
        ORDER BY m.id DESC LIMIT ?`
     )
-    .all(req.params.id, before, `%${q}%`, limit);
+    .all(req.params.id, before, `%${escapeLike(q)}%`, limit);
 
   res.json(withReactions(withReplyPreviews(withStickers(withAttachments(messages.reverse())))));
 });

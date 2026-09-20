@@ -184,6 +184,9 @@ router.use((err, req, res, next) => {
   if (err.message && err.message.startsWith('File type not allowed')) {
     return res.status(400).json({ error: err.message });
   }
+  if (err.message && err.message.startsWith('File extension not allowed')) {
+    return res.status(400).json({ error: err.message });
+  }
   next(err);
 });
 

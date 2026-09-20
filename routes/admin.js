@@ -15,6 +15,7 @@ const { createDownloadToken } = require('../helpers/downloadLink');
 const presence = require('../sockets/presence');
 const emitter = require('../sockets/emitter');
 const bus = require('../events/bus');
+const { findUserByPhone } = require('../helpers/phone');
 const {
   USER_BANNED,
   USER_UNBANNED,
@@ -92,7 +93,7 @@ router.get(
     const phone = (req.query.phone || '').trim();
     if (!phone) return res.status(400).json({ error: 'phone is required' });
 
-    const user = db.prepare('SELECT * FROM users WHERE phone = ?').get(phone);
+    const user = findUserByPhone(db, phone);
     if (!user) return res.status(404).json({ error: 'User not found' });
 
     res.json(serializeModerationProfile(user));

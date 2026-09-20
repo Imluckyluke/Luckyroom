@@ -50,4 +50,15 @@ function joinUserToRoom(userId, target) {
   }
 }
 
-module.exports = { setIO, getIO, emit, emitToUser, disconnectSession, joinUserToRoom };
+// Removes a user's live socket(s) from a room — used when they are kicked
+// or the room is deleted. Without this they keep receiving message:new for
+// a chat they no longer belong to until they reconnect.
+function leaveUserFromRoom(userId, target) {
+  if (!ioRef || !userId || !target) return;
+  const roomName = target.type === 'group' ? `group:${target.id}` : `dm:${target.id}`;
+  for (const socket of ioRef.sockets.sockets.values()) {
+    if (socket.userId === userId) socket.leave(roomName);
+  }
+}
+
+module.exports = { setIO, getIO, emit, emitToUser, disconnectSession, joinUserToRoom, leaveUserFromRoom };

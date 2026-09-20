@@ -9,6 +9,7 @@ const { getUserRoleKeys } = require('../helpers/permissions');
 const bus = require('../events/bus');
 const { USERNAME_SET, USER_BLOCKED, USER_UNBLOCKED, USER_MUTED_BY_USER, USER_UNMUTED_BY_USER } = require('../events/types');
 const { isBlocked, isMutedByUser } = require('../helpers/social');
+const { LIMITS, tooLong } = require('../helpers/validation');
 
 const router = express.Router();
 
@@ -72,6 +73,12 @@ router.patch('/me', (req, res) => {
   }
   if (name !== undefined && !String(name).trim()) {
     return res.status(400).json({ error: 'Name cannot be empty' });
+  }
+  if (name !== undefined && tooLong(name.trim(), LIMITS.userName)) {
+    return res.status(400).json({ error: `Name must be at most ${LIMITS.userName} characters` });
+  }
+  if (bio !== undefined && tooLong(bio, LIMITS.userBio)) {
+    return res.status(400).json({ error: `Bio must be at most ${LIMITS.userBio} characters` });
   }
 
   if (name !== undefined) {

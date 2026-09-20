@@ -11,6 +11,7 @@ const { previewText } = require('../helpers/chatReads');
 const { createDownloadToken } = require('../helpers/downloadLink');
 const asyncHandler = require('../helpers/asyncHandler');
 const { paginationParams } = require('../helpers/pagination');
+const { LIMITS, escapeLike, tooLong } = require('../helpers/validation');
 const emitter = require('../sockets/emitter');
 const bus = require('../events/bus');
 const backup = require('../helpers/backup');
@@ -37,11 +38,22 @@ router.post(
     const title = (req.body && req.body.title ? String(req.body.title) : '').trim();
     const body = req.body && req.body.body ? String(req.body.body).trim() : null;
     if (!title) return res.status(400).json({ error: 'title is required' });
+    if (tooLong(title, LIMITS.broadcastTitle)) {
+      return res.status(400).json({ error: `title must be at most ${LIMITS.broadcastTitle} characters` });
+    }
+    if (body && tooLong(body, LIMITS.broadcastBody)) {
+      return res.status(400).json({ error: `body must be at most ${LIMITS.broadcastBody} characters` });
+    }
 
     const users = db.prepare('SELECT id FROM users').all();
-    for (const u of users) {
-      createNotification({ userId: u.id, type: 'broadcast', title, body });
-    }
+    // One transaction for the whole fan-out: either every notification row
+    // lands or none does (no half-sent broadcasts on crash).
+    const broadcastTx = db.transaction(() => {
+      for (const u of users) {
+        createNotification({ userId: u.id, type: 'broadcast', title, body });
+      }
+    });
+    broadcastTx();
 
     // Real-time push for anyone currently connected; anyone offline will
     // still see it next time they load /api/notifications.
@@ -165,8 +177,8 @@ router.get(
     const { limit, offset } = paginationParams(req.query);
     const search = (req.query.search || '').trim();
 
-    const where = search ? 'WHERE g.name LIKE ?' : '';
-    const params = search ? [`%${search}%`] : [];
+    const where = search ? "WHERE g.name LIKE ? ESCAPE '\\'" : '';
+    const params = search ? [`%${escapeLike(search)}%`] : [];
 
     const rooms = db
       .prepare(
@@ -201,8 +213,8 @@ router.get(
     const { limit, offset } = paginationParams(req.query);
     const search = (req.query.search || '').trim();
 
-    const where = search ? 'WHERE name LIKE ? OR phone LIKE ?' : '';
-    const params = search ? [`%${search}%`, `%${search}%`] : [];
+    const where = search ? "WHERE name LIKE ? ESCAPE '\\' OR phone LIKE ? ESCAPE '\\'" : '';
+    const params = search ? [`%${escapeLike(search)}%`, `%${escapeLike(search)}%`] : [];
 
     const users = db
       .prepare(`SELECT id, name, phone, created_at FROM users ${where} ORDER BY id DESC LIMIT ? OFFSET ?`)

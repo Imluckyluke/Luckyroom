@@ -1,8 +1,17 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const helmet = require('helmet');
 const http = require('http');
 const { Server } = require('socket.io');
+
+// Fail fast when auth secrets are missing instead of signing tokens with
+// `undefined` (jsonwebtoken would throw on first login) or deriving weak
+// file-encryption keys. Every deployment (including Railway) must set these.
+if (!process.env.JWT_SECRET) {
+  console.error('[fatal] JWT_SECRET is not set — refusing to start.');
+  process.exit(1);
+}
 
 const authRoutes = require('./routes/auth');
 const groupRoutes = require('./routes/groups');
@@ -30,8 +39,14 @@ registerCoreListeners();
 ensureDefaultSuperAdmin();
 
 const app = express();
+// Behind Railway / Nginx the client IP only arrives via X-Forwarded-For.
+// Trust the first proxy hop so req.ip (used by the rate limiter) is real.
+app.set('trust proxy', 1);
+// Security headers. CSP stays off: the vanilla frontend uses inline scripts
+// and third-party font CDNs, which a default CSP would break.
+app.use(helmet({ contentSecurityPolicy: false }));
 app.use(cors({ origin: process.env.CORS_ORIGIN || '*' }));
-app.use(express.json());
+app.use(express.json({ limit: '200kb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Standard, IP-based rate limit applied to every /api request.

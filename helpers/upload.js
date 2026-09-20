@@ -9,6 +9,16 @@ if (!fs.existsSync(config.upload.dir)) {
   fs.mkdirSync(config.upload.dir, { recursive: true });
 }
 
+// Allowed extensions per category — enforced together with the MIME-type
+// allowlist in fileFilterFor(), since the client-supplied MIME type alone
+// can be spoofed (e.g. an .exe renamed with an image MIME type).
+const EXTENSIONS_BY_CATEGORY = {
+  file: new Set(['.pdf', '.zip', '.doc', '.docx', '.xls', '.xlsx', '.txt', '.csv']),
+  image: new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp']),
+  voice: new Set(['.ogg', '.oga', '.mp3', '.mp4', '.m4a', '.wav', '.webm', '.aac']),
+  video: new Set(['.mp4', '.webm', '.ogg', '.ogv', '.mov', '.mkv', '.3gp'])
+};
+
 function randomFilename(originalname) {
   const ext = path.extname(originalname || '');
   const unique = crypto.randomBytes(16).toString('hex');
@@ -86,8 +96,16 @@ class EncryptedDiskStorage {
 function fileFilterFor(categoryKey) {
   const category = config.upload.categories[categoryKey];
   return (req, file, cb) => {
-    if (category.allowedMimeTypes.includes(file.mimetype)) return cb(null, true);
-    cb(new Error(`File type not allowed for ${categoryKey}: ${file.mimetype}`));
+    if (!category.allowedMimeTypes.includes(file.mimetype)) {
+      return cb(new Error(`File type not allowed for ${categoryKey}: ${file.mimetype}`));
+    }
+    // The MIME type comes from the client and can be spoofed, so the file
+    // extension must also match the category — cheap second barrier.
+    const ext = path.extname(file.originalname || '').toLowerCase();
+    if (!EXTENSIONS_BY_CATEGORY[categoryKey].has(ext)) {
+      return cb(new Error(`File extension not allowed for ${categoryKey}: ${ext || '(none)'}`));
+    }
+    cb(null, true);
   };
 }
 

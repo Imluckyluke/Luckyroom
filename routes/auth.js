@@ -22,6 +22,7 @@ const emitter = require('../sockets/emitter');
 const { createRateLimiter } = require('../helpers/rateLimiter');
 const accountLock = require('../helpers/accountLock');
 const securityQuestions = require('../helpers/securityQuestions');
+const { normalizePhone, isValidPhone, findUserByPhone } = require('../helpers/phone');
 const config = require('../config');
 
 const router = express.Router();
@@ -79,6 +80,10 @@ router.post('/register', authLimiter, (req, res) => {
   if (String(password).length < 6) {
     return res.status(400).json({ error: 'Password must be at least 6 characters' });
   }
+  const canonicalPhone = normalizePhone(phone);
+  if (!isValidPhone(canonicalPhone)) {
+    return res.status(400).json({ error: 'Invalid phone number' });
+  }
 
   let validatedQuestions = null;
   if (chosenQuestions !== undefined) {
@@ -97,7 +102,7 @@ router.post('/register', authLimiter, (req, res) => {
     validatedQuestions = chosenQuestions;
   }
 
-  const existing = db.prepare('SELECT id FROM users WHERE phone = ?').get(phone);
+  const existing = findUserByPhone(db, phone);
   if (existing) {
     return res.status(409).json({ error: 'An account with this phone number already exists' });
   }
@@ -105,7 +110,7 @@ router.post('/register', authLimiter, (req, res) => {
   const password_hash = bcrypt.hashSync(String(password), 10);
   const info = db
     .prepare('INSERT INTO users (name, phone, password_hash) VALUES (?, ?, ?)')
-    .run(name.trim(), phone.trim(), password_hash);
+    .run(name.trim(), canonicalPhone, password_hash);
 
   const user = db.prepare('SELECT * FROM users WHERE id = ?').get(info.lastInsertRowid);
   assignRole(user.id, 'member');
@@ -177,7 +182,7 @@ router.post('/login', authLimiter, (req, res) => {
     return res.status(400).json({ error: 'phone and password are required' });
   }
 
-  const user = db.prepare('SELECT * FROM users WHERE phone = ?').get(phone.trim());
+  const user = findUserByPhone(db, phone);
 
   // Account-level lock (independent of the IP rate limiter above): once an
   // account has racked up too many failed attempts, it's locked out for a
@@ -264,9 +269,10 @@ router.post('/phone/verify/request', authLimiter, authRequired, (req, res) => {
       .json({ error: 'Please wait before requesting another code', retryAfterSeconds: result.retryAfterSeconds });
   }
 
-  // No SMS gateway is wired up — the code is written to the logs table
-  // (helpers/logger.js) instead, viewable via GET /api/logs (admin only).
-  logger.info('otp.phone_verify_generated', `Code for ${user.phone}: ${result.code}`, { userId: user.id });
+  // No SMS gateway is wired up — the code is delivered out of band (SMS
+  // provider). Only the fact that a code was issued is logged; the code
+  // itself is never written to logs, since logs are readable by admins.
+  logger.info('otp.phone_verify_generated', `Code issued for ${user.phone}`, { userId: user.id });
   bus.emit(PHONE_VERIFICATION_REQUESTED, { userId: user.id });
   res.json({ success: true, expiresAt: result.expiresAt });
 });
@@ -300,14 +306,14 @@ router.post('/password/forgot', authLimiter, (req, res) => {
   if (!phone) return res.status(400).json({ error: 'phone is required' });
 
   const trimmedPhone = String(phone).trim();
-  const user = db.prepare('SELECT * FROM users WHERE phone = ?').get(trimmedPhone);
+  const user = findUserByPhone(db, trimmedPhone);
 
   if (user) {
-    const result = otp.createOtp({ userId: user.id, phone: trimmedPhone, purpose: 'password_reset' });
+    const result = otp.createOtp({ userId: user.id, phone: user.phone, purpose: 'password_reset' });
     if (!result.throttled) {
-      // No SMS gateway is wired up — the code is written to the logs
-      // table (helpers/logger.js) instead, viewable via GET /api/logs (admin only).
-      logger.info('otp.password_reset_generated', `Code for ${trimmedPhone}: ${result.code}`, { userId: user.id });
+      // No SMS gateway is wired up — the code is delivered out of band.
+      // Never log the code itself: logs are readable by admins.
+      logger.info('otp.password_reset_generated', `Code issued for ${user.phone}`, { userId: user.id });
       bus.emit(PASSWORD_RESET_REQUESTED, { userId: user.id });
     }
   }
@@ -329,10 +335,10 @@ router.post('/password/reset', authLimiter, (req, res) => {
   }
 
   const trimmedPhone = String(phone).trim();
-  const user = db.prepare('SELECT * FROM users WHERE phone = ?').get(trimmedPhone);
+  const user = findUserByPhone(db, trimmedPhone);
   if (!user) return res.status(400).json({ error: 'Invalid phone number or code' });
 
-  const result = otp.verifyOtp({ phone: trimmedPhone, purpose: 'password_reset', code: String(code) });
+  const result = otp.verifyOtp({ phone: user.phone, purpose: 'password_reset', code: String(code) });
   if (!result.ok) return res.status(400).json({ error: result.error });
 
   const password_hash = bcrypt.hashSync(String(newPassword), 10);
@@ -359,7 +365,7 @@ router.post('/password/security-questions', authLimiter, (req, res) => {
   if (!phone) return res.status(400).json({ error: 'phone is required' });
 
   const trimmedPhone = String(phone).trim();
-  const user = db.prepare('SELECT * FROM users WHERE phone = ?').get(trimmedPhone);
+  const user = findUserByPhone(db, trimmedPhone);
   if (!user) return res.status(404).json({ error: 'No account found for this phone number' });
 
   if (user && accountLock.isLocked(user)) {
@@ -393,7 +399,7 @@ router.post('/password/reset-with-answer', authLimiter, (req, res) => {
   }
 
   const trimmedPhone = String(phone).trim();
-  const user = db.prepare('SELECT * FROM users WHERE phone = ?').get(trimmedPhone);
+  const user = findUserByPhone(db, trimmedPhone);
   if (!user) return res.status(400).json({ error: 'Invalid phone number or answer' });
 
   if (accountLock.isLocked(user)) {

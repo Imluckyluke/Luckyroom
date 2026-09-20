@@ -19,6 +19,7 @@ const { isBlockedEitherWay } = require('../helpers/social');
 const { isManager } = require('../helpers/roomRoles');
 const { findActiveSessionByJti, touchSession } = require('../helpers/sessions');
 const { getMessageReactions, toggleReaction } = require('../helpers/reactions');
+const { LIMITS } = require('../helpers/validation');
 
 function isGroupMember(groupId, userId) {
   return !!db
@@ -274,6 +275,9 @@ function registerSocketHandlers(io) {
     socket.on('message:send', ({ target, content, attachment, sticker, replyToId }) => {
       const trimmedContent = content ? String(content).trim() : '';
       if (!target || (!trimmedContent && !attachment && !sticker)) return;
+      if (trimmedContent.length > LIMITS.messageContent) {
+        return socket.emit('error:message', { error: `Message is too long (max ${LIMITS.messageContent} characters)` });
+      }
 
       if (isBanned(socket.userId)) {
         return socket.emit('error:message', { error: 'Your account has been banned' });
@@ -393,7 +397,9 @@ function registerSocketHandlers(io) {
       if (destTarget.type === 'group') {
         allowed = isGroupMember(destTarget.id, socket.userId);
         if (allowed) {
-          const lockError = lockErrorForGroup(destTarget.id, socket.userId, source.message_type);
+          // Stickers are images for lock purposes (same rule as message:send).
+          const lockType = source.message_type === 'sticker' ? 'image' : source.message_type;
+          const lockError = lockErrorForGroup(destTarget.id, socket.userId, lockType);
           if (lockError) return socket.emit('error:message', { error: lockError });
         }
       } else if (destTarget.type === 'dm') {
@@ -422,18 +428,18 @@ function registerSocketHandlers(io) {
         insert = () =>
           db
             .prepare(
-              `INSERT INTO messages (sender_id, group_id, content, message_type, upload_id, forwarded_from_name)
-               VALUES (?, ?, ?, ?, ?, ?)`
+              `INSERT INTO messages (sender_id, group_id, content, message_type, upload_id, sticker_id, forwarded_from_name)
+               VALUES (?, ?, ?, ?, ?, ?, ?)`
             )
-            .run(socket.userId, destTarget.id, source.content, source.message_type, clonedUpload ? clonedUpload.id : null, senderName);
+            .run(socket.userId, destTarget.id, source.content, source.message_type, clonedUpload ? clonedUpload.id : null, source.sticker_id || null, senderName);
       } else {
         insert = () =>
           db
             .prepare(
-              `INSERT INTO messages (sender_id, conversation_id, content, message_type, upload_id, forwarded_from_name)
-               VALUES (?, ?, ?, ?, ?, ?)`
+              `INSERT INTO messages (sender_id, conversation_id, content, message_type, upload_id, sticker_id, forwarded_from_name)
+               VALUES (?, ?, ?, ?, ?, ?, ?)`
             )
-            .run(socket.userId, destTarget.id, source.content, source.message_type, clonedUpload ? clonedUpload.id : null, senderName);
+            .run(socket.userId, destTarget.id, source.content, source.message_type, clonedUpload ? clonedUpload.id : null, source.sticker_id || null, senderName);
       }
 
       const info = insert();
@@ -448,6 +454,9 @@ function registerSocketHandlers(io) {
     // target: { type, id }, messageId, content — only the original sender can edit
     socket.on('message:edit', ({ target, messageId, content }) => {
       if (!target || !messageId || !content || !String(content).trim()) return;
+      if (String(content).trim().length > LIMITS.messageContent) {
+        return socket.emit('error:message', { error: `Message is too long (max ${LIMITS.messageContent} characters)` });
+      }
       if (!isMemberOfTarget(target, socket.userId)) {
         return socket.emit('error:message', { error: 'Not allowed to act on this target' });
       }
@@ -555,7 +564,10 @@ function registerSocketHandlers(io) {
     });
 
     socket.on('typing', (target) => {
-      if (!target) return;
+      if (!target || !target.type || !target.id) return;
+      // Only members may broadcast typing into a room — otherwise any
+      // connected client could spam typing indicators into arbitrary chats.
+      if (!isMemberOfTarget(target, socket.userId)) return;
       socket.to(room(target)).emit('typing', { target, user: { id: user.id, name: user.name } });
     });
   });

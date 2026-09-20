@@ -1,12 +1,13 @@
 const db = require('../db');
 const { assignRole } = require('./permissions');
+const { normalizePhone } = require('./phone');
 
 // Whoever has this phone number is always treated as super_admin,
 // regardless of formatting (spaces, +98/0 prefix, etc).
 const SUPER_ADMIN_PHONE_DIGITS = '9123456789';
 
 function normalizedPhoneDigits(phone) {
-  return String(phone || '').replace(/\D/g, '').replace(/^98/, '').replace(/^0/, '');
+  return normalizePhone(phone);
 }
 
 function isSuperAdminPhone(phone) {

@@ -9,6 +9,8 @@ const { isBlockedEitherWay } = require('../helpers/social');
 const { userHasPermission } = require('../helpers/permissions');
 const { createNotification } = require('../helpers/notifier');
 const { getLastMessage, isUnread, markRead, previewText, getReadStates } = require('../helpers/chatReads');
+const { findUserByPhone } = require('../helpers/phone');
+const { LIMITS, escapeLike, tooLong } = require('../helpers/validation');
 const { getReactionsForMessages } = require('../helpers/reactions');
 const emitter = require('../sockets/emitter');
 const bus = require('../events/bus');
@@ -91,6 +93,9 @@ router.use(authRequired);
 router.post('/', (req, res) => {
   const { name, type = 'private', memberPhones = [] } = req.body || {};
   if (!name || !name.trim()) return res.status(400).json({ error: 'Room name is required' });
+  if (tooLong(name.trim(), LIMITS.groupName)) {
+    return res.status(400).json({ error: `Room name must be at most ${LIMITS.groupName} characters` });
+  }
   if (!['public', 'private'].includes(type)) {
     return res.status(400).json({ error: "type must be 'public' or 'private'" });
   }
@@ -108,7 +113,7 @@ router.post('/', (req, res) => {
     );
 
     for (const phone of memberPhones) {
-      const member = db.prepare('SELECT id FROM users WHERE phone = ?').get(String(phone).trim());
+      const member = findUserByPhone(db, phone);
       if (member && member.id !== req.userId) {
         db.prepare('INSERT OR IGNORE INTO group_members (group_id, user_id) VALUES (?, ?)').run(
           groupId,
@@ -163,14 +168,15 @@ router.get('/:id/reads', (req, res) => {
 // GET /api/groups/public?q=  — discover public rooms to join (not already a member of)
 router.get('/public', (req, res) => {
   const q = (req.query.q || '').trim();
+  const like = `%${escapeLike(q)}%`;
   const rows = q
     ? db
         .prepare(
-          `SELECT * FROM groups WHERE type = 'public' AND name LIKE ?
+          `SELECT * FROM groups WHERE type = 'public' AND name LIKE ? ESCAPE '\\'
            AND id NOT IN (SELECT group_id FROM group_members WHERE user_id = ?)
            ORDER BY created_at DESC LIMIT 50`
         )
-        .all(`%${q}%`, req.userId)
+        .all(like, req.userId)
     : db
         .prepare(
           `SELECT * FROM groups WHERE type = 'public'
@@ -222,6 +228,12 @@ router.patch('/:id', (req, res) => {
   }
   if (name !== undefined && !String(name).trim()) {
     return res.status(400).json({ error: 'Room name cannot be empty' });
+  }
+  if (name !== undefined && tooLong(name.trim(), LIMITS.groupName)) {
+    return res.status(400).json({ error: `Room name must be at most ${LIMITS.groupName} characters` });
+  }
+  if (bio !== undefined && tooLong(bio, LIMITS.groupBio)) {
+    return res.status(400).json({ error: `Room bio must be at most ${LIMITS.groupBio} characters` });
   }
   if (name !== undefined) {
     db.prepare('UPDATE groups SET name = ? WHERE id = ?').run(String(name).trim(), group.id);
@@ -344,6 +356,7 @@ router.delete('/:id/members/:userId', (req, res) => {
   db.prepare('DELETE FROM group_members WHERE group_id = ? AND user_id = ?').run(group.id, targetId);
   bus.emit(ROOM_MEMBER_REMOVED, { userId: req.userId, groupId: group.id, targetId });
   emitter.emit('room:member_removed', { groupId: group.id, userId: targetId });
+  emitter.leaveUserFromRoom(targetId, { type: 'group', id: group.id });
   emitter.emitToUser(targetId, 'room:removed', { groupId: group.id });
   res.json({ removed: true });
 });
@@ -393,7 +406,7 @@ router.post('/:id/invites', (req, res) => {
       .prepare('SELECT * FROM users WHERE username = ? COLLATE NOCASE')
       .get(String(username).trim().replace(/^@/, ''));
   } else {
-    target = db.prepare('SELECT * FROM users WHERE phone = ?').get(String(phone).trim());
+    target = findUserByPhone(db, phone);
   }
   if (!target) return res.status(404).json({ error: 'User not found' });
   if (isMember(group.id, target.id)) return res.status(409).json({ error: 'User is already a member' });
@@ -661,10 +674,10 @@ router.get('/:id/messages/search', (req, res) => {
        FROM messages m
        JOIN users u ON u.id = m.sender_id
        LEFT JOIN users pinner ON pinner.id = m.pinned_by
-       WHERE m.group_id = ? AND m.id < ? AND m.deleted_at IS NULL AND m.content LIKE ?
+       WHERE m.group_id = ? AND m.id < ? AND m.deleted_at IS NULL AND m.content LIKE ? ESCAPE '\\'
        ORDER BY m.id DESC LIMIT ?`
     )
-    .all(req.params.id, before, `%${q}%`, limit);
+    .all(req.params.id, before, `%${escapeLike(q)}%`, limit);
 
   res.json(withReactions(withReplyPreviews(withStickers(withAttachments(messages.reverse())))));
 });
