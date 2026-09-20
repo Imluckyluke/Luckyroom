@@ -910,26 +910,29 @@
     border:1px solid rgba(255,255,255,.14);
     box-shadow:0 24px 70px rgba(0,0,0,.5), 0 0 44px rgba(63,169,245,.12);
   }
-  /* Arrow-fill primary button: sliding fill pill + forward arrow (CSS-only port, no markup change) */
-  .auth-btn{
+  /* Arrow-fill hero button (login/register only — modal buttons keep their
+     original paired look): sliding fill pill + forward arrow.
+     CSS-only port of ObsidianUI arrow-fill-button (MIT), no markup change. */
+  #authSubmit{
     position:relative; overflow:hidden; isolation:isolate;
     border-radius:1000px !important; padding:13px 12px;
   }
-  .auth-btn::before{
+  #authSubmit::before{
     content:""; position:absolute; top:3px; bottom:3px; inset-inline-end:3px; width:34px;
     border-radius:1000px; background:rgba(255,255,255,.28); z-index:0;
     transition:inset .38s cubic-bezier(.785,.135,.15,.86), background .38s ease;
   }
-  .auth-btn::after{
+  #authSubmit::after{
     content:"\2190"; position:absolute; inset-inline-end:12px; top:50%; transform:translateY(-50%);
     z-index:1; font-weight:800; font-size:15px; transition:transform .38s cubic-bezier(.785,.135,.15,.86);
   }
-  html[dir="ltr"] .auth-btn::after{ content:"\2192"; }
-  .auth-btn:is(:hover, :focus-visible):not(:disabled)::before{ inset-inline-end:3px; inset-inline-start:3px; width:auto; background:#fff; }
-  .auth-btn:is(:hover, :focus-visible):not(:disabled){ color:#0B1220; }
-  .auth-btn:is(:hover, :focus-visible):not(:disabled)::after{ transform:translateY(-50%) scale(1.15); }
-  .auth-btn:focus-visible{ outline:2px solid #7cc4ff; outline-offset:3px; }
-  .auth-btn:disabled::before, .auth-btn:disabled::after{ display:none; }
+  html[dir="ltr"] #authSubmit::after{ content:"\2192"; }
+  html[data-theme="light"] #authSubmit::before, html[data-theme="light-classic"] #authSubmit::before{ background:rgba(255,255,255,.45); }
+  #authSubmit:is(:hover, :focus-visible):not(:disabled)::before{ inset-inline-end:3px; inset-inline-start:3px; width:auto; background:#fff; }
+  #authSubmit:is(:hover, :focus-visible):not(:disabled){ color:#0B1220; }
+  #authSubmit:is(:hover, :focus-visible):not(:disabled)::after{ transform:translateY(-50%) scale(1.15); }
+  #authSubmit:focus-visible{ outline:2px solid #7cc4ff; outline-offset:3px; }
+  #authSubmit:disabled::before, #authSubmit:disabled::after{ display:none; }
   /* Visible keyboard focus everywhere (mouse users unaffected) */
   :focus-visible{ outline:2px solid var(--tg-blue); outline-offset:2px; }
   .icon-btn:focus-visible{ outline-offset:3px; }
