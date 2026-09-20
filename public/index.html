@@ -401,7 +401,7 @@
   }
   .search-pill input{ background:none; border:none; outline:none; color:var(--ink); font-family:inherit; font-size:13.5px; width:100%; }
 
-  .room-list{ display:flex; flex-direction:column; gap:2px; overflow-y:auto; overflow-x:hidden; flex:1; min-height:0; }
+  .room-list{ display:flex; flex-direction:column; gap:2px; overflow-y:auto; overflow-x:hidden; flex:1; min-height:0; padding:6px 8px; margin:0 -8px; }
   .empty-hint{ text-align:center; color:var(--muted); font-size:12.5px; padding:24px 12px; line-height:1.8; }
   .room-item{
     display:flex; align-items:center; gap:11px;
@@ -409,8 +409,8 @@
     transition: background .2s ease, transform .18s ease;
     -webkit-tap-highlight-color: transparent;
   }
-  .room-item:hover{ background: rgba(var(--surface-rgb),0.05); transform: translateX(-2px); }
-  html[dir="ltr"] .room-item:hover{ transform: translateX(2px); }
+  .room-item:hover{ background: rgba(var(--surface-rgb),0.05); }
+  html[dir="ltr"] .room-item:hover{ background: rgba(var(--surface-rgb),0.05); }
   .room-item:active{ transform: scale(.98); }
   .room-item.active{ background: rgba(63,169,245,0.14); }
   .avatar{
@@ -536,6 +536,7 @@
     position:absolute; bottom:100%; margin-bottom:6px; display:flex; flex-direction:column; gap:4px;
     background: var(--popover-bg); border:1px solid var(--glass-edge-dim); border-radius:12px; padding:6px;
     backdrop-filter: blur(6px); z-index:8; min-width:168px; max-width:min(240px, 70vw);
+    max-height:min(340px, 55dvh); overflow-y:auto;
     opacity:0; visibility:hidden; pointer-events:none;
     transform: translate(var(--pos-shift, 0px), 6px) scale(.95);
     transition: opacity .15s ease, transform .15s ease, visibility .15s;
@@ -2711,15 +2712,24 @@
   function positionHoverMenu(menu) {
     menu.style.setProperty('--pos-shift', '0px');
     menu.classList.remove('below');
-    const rect = menu.getBoundingClientRect();
+    const scroller = menu.closest('.messages');
+    const cTop = scroller ? scroller.getBoundingClientRect().top : 0;
+    const cBottom = scroller ? scroller.getBoundingClientRect().bottom : window.innerHeight;
+    let rect = menu.getBoundingClientRect();
     const margin = 8;
     // No room above (first visible messages, under a sticky header)? Open below the bubble.
-    if (rect.top < 72) menu.classList.add('below');
-    const r2 = menu.getBoundingClientRect();
+    if (rect.top < cTop + 4) menu.classList.add('below');
+    rect = menu.getBoundingClientRect();
     let shift = 0;
-    if (r2.right > window.innerWidth - margin) shift -= (r2.right - (window.innerWidth - margin));
-    if (r2.left + shift < margin) shift += margin - (r2.left + shift);
+    if (rect.right > window.innerWidth - margin) shift -= (rect.right - (window.innerWidth - margin));
+    if (rect.left + shift < margin) shift += margin - (rect.left + shift);
     menu.style.setProperty('--pos-shift', `${shift}px`);
+    // Still spilling below the visible chat area? Nudge the row into view.
+    const r2 = menu.getBoundingClientRect();
+    if (r2.bottom > cBottom - 4 && scroller) {
+      const row = menu.closest('.msg-row');
+      if (row) row.scrollIntoView({ block: 'nearest' });
+    }
   }
 
   // Closes the hover popover right after picking an action or reaction,
