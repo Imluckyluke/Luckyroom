@@ -48,7 +48,30 @@
   .progress-fill.warn{ background: var(--warn); }
   .progress-fill.bad{ background: var(--bad); }
   .charts{ display:grid; grid-template-columns: 1fr 1fr; gap:14px; }
-  @media (max-width: 760px){ .charts{ grid-template-columns: 1fr; } }
+  @media (max-width: 760px){
+    .charts{ grid-template-columns: 1fr; }
+    body{ padding:14px; }
+    .panel{ padding:14px; }
+    .topbar h1{ font-size:17px; }
+    table.admins{ display:block; overflow-x:auto; white-space:nowrap; }
+    table.admins th, table.admins td{ padding:8px 10px; }
+    .row .btn{ min-height:44px; }
+    .field{ font-size:16px; }
+  }
+  .card:hover{ transform: translateY(-3px); box-shadow:0 10px 28px rgba(63,169,245,.16); border-color:rgba(63,169,245,.35); }
+  .panel{ transition: box-shadow .25s ease, border-color .25s ease; }
+  .panel:hover{ box-shadow:0 8px 28px rgba(0,0,0,.30); }
+  table.admins tbody tr{ transition: background .15s ease; }
+  table.admins tbody tr:hover{ background:rgba(63,169,245,.07); }
+  .btn{ transition: transform .15s cubic-bezier(.34,1.56,.64,1), filter .15s ease, box-shadow .2s ease; }
+  .btn:hover{ filter:brightness(1.1); box-shadow:0 6px 16px rgba(63,169,245,.30); }
+  .btn:active{ transform:scale(.96); }
+  .log-lv{ display:inline-block; font-size:11px; font-weight:700; padding:2px 9px; border-radius:999px; }
+  .log-lv.error{ background:rgba(255,107,107,.14); color:var(--bad); }
+  .log-lv.warn{ background:rgba(255,194,75,.14); color:var(--warn); }
+  .log-lv.info{ background:rgba(63,169,245,.14); color:var(--tg-blue); }
+  .log-lv.debug{ background:rgba(255,255,255,.08); color:var(--muted); }
+  .log-msg{ max-width:340px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .chart-card{ background: var(--glass-fill); border:1px solid var(--glass-edge); border-radius:16px; padding:16px; }
   .chart-card .label{ font-size:13px; color: var(--muted); margin-bottom:8px; }
   canvas{ width:100%; height:160px; display:block; }
@@ -342,6 +365,47 @@
       <button class="btn danger" id="restoreBtn">بازگردانی</button>
     </div>
     <div class="msg-line" id="restoreMsg"></div>
+  </div>
+
+  <!-- ===================== Audit logs ===================== -->
+  <div class="panel hidden" id="logsPanel">
+    <h2>لاگ رویدادها</h2>
+    <div class="row">
+      <select class="field" id="logsLevelFilter">
+        <option value="">همه سطوح</option>
+        <option value="error">error</option>
+        <option value="warn">warn</option>
+        <option value="info">info</option>
+        <option value="debug">debug</option>
+      </select>
+      <input class="field grow" id="logsActionFilter" placeholder="فیلتر action...">
+      <button class="btn" id="logsSearchBtn">جستجو</button>
+    </div>
+    <div class="msg-line" id="logsMsg"></div>
+    <table class="admins">
+      <thead><tr><th>سطح</th><th>رویداد</th><th>پیام</th><th>کاربر</th><th>زمان</th></tr></thead>
+      <tbody id="logsTableBody"></tbody>
+    </table>
+    <div class="empty-hint" id="logsEmptyHint" style="display:none;">لاگی یافت نشد.</div>
+    <div class="row" style="margin-top:10px;">
+      <button class="btn small ghost" id="logsPrevBtn">قبلی</button>
+      <button class="btn small ghost" id="logsNextBtn">بعدی</button>
+    </div>
+  </div>
+
+  <!-- ===================== Sticker packs ===================== -->
+  <div class="panel hidden" id="stickersPanel">
+    <h2>پک‌های استیکر</h2>
+    <div class="row">
+      <input class="field grow" id="stickerImportInput" placeholder="https://t.me/addstickers/..." dir="ltr">
+      <button class="btn" id="stickerImportBtn">ایمپورت از تلگرام</button>
+    </div>
+    <div class="msg-line" id="stickersMsg"></div>
+    <table class="admins">
+      <thead><tr><th>نام</th><th>عنوان</th><th>تعداد</th><th>حذف</th></tr></thead>
+      <tbody id="stickersTableBody"></tbody>
+    </table>
+    <div class="empty-hint" id="stickersEmptyHint" style="display:none;">هنوز پکی ایمپورت نشده است.</div>
   </div>
 
   <!-- ===================== Rooms browser ===================== -->
@@ -1151,11 +1215,132 @@
     }
   }
 
+  /* ---- Audit logs (GET /api/logs; 403 without logs.view hides the panel) ---- */
+  let logsPage = 0;
+  const LOGS_PAGE_SIZE = 20;
+  async function loadLogs() {
+    const level = el('logsLevelFilter').value;
+    const action = el('logsActionFilter').value.trim();
+    const params = new URLSearchParams({ limit: LOGS_PAGE_SIZE, offset: logsPage * LOGS_PAGE_SIZE });
+    if (level) params.set('level', level);
+    if (action) params.set('action', action);
+    try {
+      const rows = await apiFetch(`/api/logs?${params}`);
+      el('logsPanel').classList.remove('hidden');
+      el('logsEmptyHint').style.display = rows.length ? 'none' : 'block';
+      el('logsTableBody').innerHTML = rows.map((r) => `
+        <tr>
+          <td><span class="log-lv ${escapeHtml(r.level)}">${escapeHtml(r.level)}</span></td>
+          <td>${escapeHtml(r.action)}</td>
+          <td><div class="log-msg" title="${escapeHtml(r.message || '')}">${escapeHtml(r.message || '-')}</div></td>
+          <td>${r.user_id || '-'}</td>
+          <td>${fmtDate(r.created_at)}</td>
+        </tr>`).join('');
+      setMsg('logsMsg', '', true);
+    } catch (e) {
+      if (/Forbidden|missing permission/i.test(e.message)) el('logsPanel').classList.add('hidden');
+      else setMsg('logsMsg', e.message, false);
+    }
+  }
+  function initLogsPanel() {
+    el('logsSearchBtn').addEventListener('click', () => { logsPage = 0; loadLogs(); });
+    el('logsPrevBtn').addEventListener('click', () => { if (logsPage > 0) { logsPage--; loadLogs(); } });
+    el('logsNextBtn').addEventListener('click', () => { logsPage++; loadLogs(); });
+    loadLogs();
+  }
+
+  /* ---- Sticker packs (list + Telegram import + delete own) ---- */
+  async function loadStickers() {
+    try {
+      const packs = await apiFetch('/api/stickers/packs');
+      el('stickersPanel').classList.remove('hidden');
+      el('stickersEmptyHint').style.display = packs.length ? 'none' : 'block';
+      el('stickersTableBody').innerHTML = packs.map((p) => `
+        <tr>
+          <td dir="ltr">${escapeHtml(p.name)}</td>
+          <td>${escapeHtml(p.title || '-')}</td>
+          <td>${(p.items || []).length}</td>
+          <td><button class="btn small danger" data-del-pack="${p.id}">حذف</button></td>
+        </tr>`).join('');
+      el('stickersTableBody').querySelectorAll('[data-del-pack]').forEach((b) => {
+        b.addEventListener('click', async () => {
+          if (!confirm('این پک حذف شود؟')) return;
+          try {
+            await apiFetch(`/api/stickers/packs/${b.dataset.delPack}`, { method: 'DELETE' });
+            setMsg('stickersMsg', 'پک حذف شد', true);
+            loadStickers();
+          } catch (e) { setMsg('stickersMsg', e.message, false); }
+        });
+      });
+    } catch (e) { setMsg('stickersMsg', e.message, false); }
+  }
+  function initStickersPanel() {
+    el('stickerImportBtn').addEventListener('click', async () => {
+      const url = el('stickerImportInput').value.trim();
+      if (!url) return setMsg('stickersMsg', 'لینک پک را وارد کنید', false);
+      setMsg('stickersMsg', 'در حال ایمپورت...', true);
+      try {
+        await apiFetch('/api/stickers/packs/import', { method: 'POST', body: JSON.stringify({ url }) });
+        el('stickerImportInput').value = '';
+        setMsg('stickersMsg', 'ایمپورت موفق', true);
+        loadStickers();
+      } catch (e) { setMsg('stickersMsg', e.message, false); }
+    });
+    loadStickers();
+  }
+
+  /* ---- Click sparks (vanilla port of ObsidianUI click-spark, MIT) ---- */
+  (function initClickSparks(){
+    if (!window.matchMedia || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const canvas = document.createElement('canvas');
+    canvas.setAttribute('aria-hidden', 'true');
+    canvas.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:9999;';
+    document.body.appendChild(canvas);
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    let sparks = [], running = false;
+    const DUR = 400;
+    function resize(){
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      canvas.width = Math.floor(window.innerWidth * dpr);
+      canvas.height = Math.floor(window.innerHeight * dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+    function burst(x, y){
+      const now = performance.now();
+      for (let i = 0; i < 8; i++) sparks.push({ x, y, a: (Math.PI * 2 * i) / 8, t: now });
+      if (!running) { running = true; requestAnimationFrame(frame); }
+    }
+    function frame(now){
+      ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+      sparks = sparks.filter((s) => {
+        const p = (now - s.t) / DUR;
+        if (p >= 1) return false;
+        const e = p * (2 - p), dist = e * 26, len = 10 * (1 - e);
+        ctx.strokeStyle = `rgba(255,255,255,${(0.9 * (1 - p)).toFixed(3)})`;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(s.x + dist * Math.cos(s.a), s.y + dist * Math.sin(s.a));
+        ctx.lineTo(s.x + (dist + len) * Math.cos(s.a), s.y + (dist + len) * Math.sin(s.a));
+        ctx.stroke();
+        return true;
+      });
+      if (sparks.length) requestAnimationFrame(frame);
+      else { running = false; ctx.clearRect(0, 0, window.innerWidth, window.innerHeight); }
+    }
+    document.addEventListener('click', (e) => burst(e.clientX, e.clientY));
+    document.addEventListener('touchstart', (e) => {
+      for (const t of e.changedTouches) burst(t.clientX, t.clientY);
+    }, { passive: true });
+    window.addEventListener('resize', resize);
+    resize();
+  })();
+
   function connect() {
     if (!token) { showLogin(); return; }
     socket = io('/dashboard', { auth: { token } });
 
-    socket.on('connect', () => { showDashboard(); loadAdmins(); loadUploadLimits(); initSuperAdminSections(); });
+    socket.on('connect', () => { showDashboard(); loadAdmins(); loadUploadLimits(); initSuperAdminSections(); initLogsPanel(); initStickersPanel(); });
     socket.on('dashboard:stats', applySnapshot);
     socket.on('connect_error', () => {
       localStorage.removeItem('chat_token');
