@@ -264,6 +264,13 @@
     color:var(--ink); font-family:inherit; outline:none; transition: border-color .2s;
   }
   .field input:focus{ border-color: var(--tg-blue); }
+  /* Inline profile/room name editors (same look as .field inputs) */
+  #profileNameInput, #profileUsernameInput, #roomNameInput{
+    width:100%; max-width:100%; padding:11px 14px; border-radius:14px; font-size:14px;
+    background: rgba(var(--surface-rgb),0.06); border:1px solid rgba(var(--surface-rgb),0.12);
+    color:var(--ink); font-family:inherit; outline:none; transition: border-color .2s;
+  }
+  #profileNameInput:focus, #profileUsernameInput:focus, #roomNameInput:focus{ border-color: var(--tg-blue); }
   .field select{
     width:100%; padding:11px 14px; border-radius:14px; font-size:14px;
     background: rgba(var(--surface-rgb),0.06); border:1px solid rgba(var(--surface-rgb),0.12);
@@ -384,6 +391,7 @@
     background:#FF3D8A; color:#fff; font-size:10px; line-height:1; padding:2px 5px; border-radius:8px; margin-inline-start:auto;
   }
   .menu-divider{ height:1px; background: rgba(var(--surface-rgb),0.1); margin:4px 2px; }
+  .menu-section{ font-size:11px; color:var(--muted); font-weight:700; padding:8px 10px 2px; }
 
   .search-pill{
     display:flex; align-items:center; gap:8px;
@@ -424,11 +432,11 @@
     display:flex; align-items:center; justify-content:space-between;
     padding:14px 22px; position:relative; z-index:3;
   }
-  .chat-header-left{ display:flex; align-items:center; gap:12px; }
+  .chat-header-left{ display:flex; align-items:center; gap:12px; min-width:0; flex:1; }
   .icon-btn.mobile-back-btn{ display:none; }
   html[dir="ltr"] .icon-btn.mobile-back-btn{ transform: scaleX(-1); }
-  .chat-title{ font-size:15px; font-weight:800; }
-  .chat-sub{ font-size:12px; color: var(--muted); }
+  .chat-title{ font-size:15px; font-weight:800; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; flex:1; }
+  .chat-sub{ font-size:12px; color: var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .chat-sub.online{ color: var(--tg-blue); }
   .header-actions{ display:flex; gap:8px; }
   .icon-btn{
@@ -515,17 +523,19 @@
 
   .msg-forwarded-tag{ font-size:11.5px; font-style:italic; opacity:.75; margin-bottom:3px; }
 
-  .msg-meta{ display:flex; align-items:center; gap:3px; margin: 4px 6px 0 6px; }
+  .msg-meta{ display:flex; align-items:center; gap:3px; margin: 4px 6px 0 6px; direction:ltr; }
+  .bubble.sticker-bubble.mine .msg-meta{ margin-inline-start:auto; }
   .msg-time{ font-size:10.5px; color: rgba(var(--surface-rgb),0.85); }
   .msg-row:not(.mine) .msg-time{ color: var(--muted); }
   .msg-ticks{ font-size:11px; color: rgba(var(--surface-rgb),0.7); letter-spacing:-1px; }
   .msg-ticks.seen{ color:#4FC3F7; }
 
   .msg-row{ position:relative; }
+  .msg-row:hover{ z-index:8; }
   .msg-hover-actions{
     position:absolute; bottom:100%; margin-bottom:6px; display:flex; flex-direction:column; gap:4px;
     background: var(--popover-bg); border:1px solid var(--glass-edge-dim); border-radius:12px; padding:6px;
-    backdrop-filter: blur(6px); z-index:5; min-width:168px;
+    backdrop-filter: blur(6px); z-index:8; min-width:168px; max-width:min(240px, 70vw);
     opacity:0; visibility:hidden; pointer-events:none;
     transform: translate(var(--pos-shift, 0px), 6px) scale(.95);
     transition: opacity .15s ease, transform .15s ease, visibility .15s;
@@ -537,6 +547,10 @@
     transform: translate(var(--pos-shift, 0px), 0) scale(1);
   }
   .msg-hover-actions.force-closed{ opacity:0 !important; visibility:hidden !important; pointer-events:none !important; }
+  /* Flipped below the bubble when there is no room above (first messages) */
+  .msg-hover-actions.below{ top:100%; bottom:auto; margin:6px 0 0; }
+  .msg-hover-actions.below{ transform: translate(var(--pos-shift, 0px), -6px) scale(.95); }
+  .msg-row:hover .msg-hover-actions.below{ transform: translate(var(--pos-shift, 0px), 0) scale(1); }
 
   .msg-reaction-row{
     display:flex; gap:2px; padding-bottom:5px; margin-bottom:1px;
@@ -815,7 +829,7 @@
   @keyframes overlayIn{ from{ opacity:0; } to{ opacity:1; } }
   .modal-overlay:not(.hidden) .modal{ animation: modalPop .32s cubic-bezier(.2,.8,.3,1.15) both; }
   @keyframes modalPop{ from{ opacity:0; transform: translateY(18px) scale(.94); } to{ opacity:1; transform: translateY(0) scale(1); } }
-  .modal{ width:100%; max-width:340px; padding:24px; z-index:1; }
+  .modal{ width:100%; max-width:340px; max-height:calc(100dvh - 48px); overflow-y:auto; padding:24px; z-index:1; }
   .modal-title{ font-size:16px; font-weight:800; margin-bottom:16px; }
   .modal-actions{ display:flex; gap:8px; margin-top:16px; }
   .modal-actions .auth-btn{ margin-top:0; }
@@ -941,36 +955,32 @@
     border:1px solid rgba(255,255,255,.14);
     box-shadow:0 24px 70px rgba(0,0,0,.5), 0 0 44px rgba(63,169,245,.12);
   }
-  /* Arrow-fill hero button (login/register only — modal buttons keep their
-     original paired look): sliding fill pill + forward arrow.
-     CSS-only port of ObsidianUI arrow-fill-button (MIT), no markup change. */
+  /* Hero button (login/register): clean pill, inline arrow that nudges on
+     hover. No badge/fill overlays — white label on blue gradient in every
+     state and every theme, so contrast can never break. */
   #authSubmit{
-    position:relative; overflow:hidden; isolation:isolate;
+    position:relative; overflow:hidden;
     border-radius:1000px !important; padding:13px 12px;
-  }
-  /* True circle badge (not an ellipse): height locked to the button,
-     width derived from aspect-ratio. White badge, blue arrow, white label —
-     every state keeps white text on blue fills, so contrast never breaks. */
-  #authSubmit::before{
-    content:""; position:absolute; top:4px; bottom:4px; inset-inline-end:4px;
-    aspect-ratio:1/1; width:auto; border-radius:50%; background:#fff; z-index:0;
-    transition:inset .38s cubic-bezier(.785,.135,.15,.86), border-radius .38s ease, background .38s ease;
+    transition:transform .18s ease, box-shadow .25s ease, filter .25s ease;
   }
   #authSubmit::after{
-    content:"\2190"; position:absolute; inset-inline-end:4px; top:4px; bottom:4px; aspect-ratio:1/1;
-    display:flex; align-items:center; justify-content:center;
-    z-index:1; font-weight:800; font-size:16px; color:#1F6FEB;
-    transition:color .25s ease;
+    content:"\2190"; display:inline-block; margin-inline-start:8px;
+    font-weight:800; font-size:15px; color:#fff; vertical-align:-1px;
+    transition:transform .3s cubic-bezier(.34,1.56,.64,1);
   }
   html[dir="ltr"] #authSubmit::after{ content:"\2192"; }
-  #authSubmit:is(:hover, :focus-visible):not(:disabled)::before{
-    inset-inline-end:4px; inset-inline-start:4px; border-radius:1000px;
-    background:linear-gradient(135deg,#1B5FBF,#2F8FE3);
+  #authSubmit:is(:hover, :focus-visible):not(:disabled){
+    color:#fff; filter:brightness(1.12);
+    box-shadow:0 8px 26px rgba(63,169,245,.5); transform:translateY(-1px);
   }
-  #authSubmit:is(:hover, :focus-visible):not(:disabled){ color:#fff; }
-  #authSubmit:is(:hover, :focus-visible):not(:disabled)::after{ color:#fff; }
+  html[data-theme="obsidian"] #authSubmit:is(:hover, :focus-visible):not(:disabled){
+    box-shadow:0 8px 26px rgba(168,85,247,.55);
+  }
+  #authSubmit:is(:hover, :focus-visible):not(:disabled)::after{ transform:translateX(-5px); }
+  html[dir="ltr"] #authSubmit:is(:hover, :focus-visible):not(:disabled)::after{ transform:translateX(5px); }
+  #authSubmit:active:not(:disabled){ transform:scale(.98); }
   #authSubmit:focus-visible{ outline:2px solid #7cc4ff; outline-offset:3px; }
-  #authSubmit:disabled::before, #authSubmit:disabled::after{ display:none; }
+  #authSubmit:disabled::after{ display:none; }
   /* Loading shimmer on the hero button while the request is in flight */
   #authSubmit:disabled{ position:relative; overflow:hidden; }
   #authSubmit:disabled::after{
@@ -1158,13 +1168,16 @@
         <div class="menu-wrap">
           <div class="icon-circle" id="menuBtn" title="منو" style="position:relative;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg><span id="invitesBadge" class="hidden" style="position:absolute; top:-2px; left:-2px; background:#FF3D8A; color:#fff; font-size:10px; line-height:1; padding:2px 4px; border-radius:8px;"></span></div>
           <div class="menu-dropdown hidden" id="menuDropdown">
+            <div class="menu-section" data-i18n="menu_section_new">جدید</div>
             <div class="menu-item" id="newDmBtn"><span class="menu-item-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 5-5.5 8-5.5s6.5 1.5 8 5.5"/></svg></span><span data-i18n="menu_new_dm">گفتگوی خصوصی جدید</span></div>
             <div class="menu-item" id="newGroupBtn"><span class="menu-item-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></span><span data-i18n="menu_new_room">روم جدید</span></div>
             <div class="menu-divider"></div>
+            <div class="menu-section" data-i18n="menu_section_me">من</div>
             <div class="menu-item" id="myProfileBtn"><span class="menu-item-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="11" r="2"/><path d="M5.5 16.5c.8-1.8 1.9-2.5 3-2.5s2.2.7 3 2.5M14 9.5h5M14 13h5"/></svg></span><span data-i18n="menu_my_profile">مشاهده پروفایل</span></div>
             <div class="menu-item" id="publicRoomsBtn"><span class="menu-item-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.6 3.9 5.7 3.9 9s-1.4 6.4-3.9 9c-2.5-2.6-3.9-5.7-3.9-9S9.5 5.6 12 3z"/></svg></span><span data-i18n="menu_public_rooms">روم‌های عمومی</span></div>
             <div class="menu-item" id="invitesBtn"><span class="menu-item-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg></span><span data-i18n="menu_invites">دعوت‌ها</span><span id="invitesMenuBadge" class="menu-item-badge hidden"></span></div>
             <div class="menu-divider"></div>
+            <div class="menu-section" data-i18n="menu_section_settings">تنظیمات</div>
             <div class="menu-item" id="sessionsBtn"><span class="menu-item-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M9 20h6M12 16v4"/></svg></span><span data-i18n="menu_sessions">دستگاه‌ها و نشست‌ها</span></div>
             <div class="menu-item" id="customizationBtn"><span class="menu-item-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 8h10M18 8h2M4 16h4M12 16h8"/><circle cx="16" cy="8" r="2"/><circle cx="10" cy="16" r="2"/></svg></span><span data-i18n="menu_customization">شخصی‌سازی</span></div>
             <div class="menu-item" id="langBtn"><span class="menu-item-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.6 3.9 5.7 3.9 9s-1.4 6.4-3.9 9c-2.5-2.6-3.9-5.7-3.9-9S9.5 5.6 12 3z"/></svg></span><span data-i18n="menu_language">زبان</span></div>
@@ -1376,7 +1389,7 @@
           <input type="file" id="roomAvatarInput" accept="image/*" class="hidden">
         </div>
         <div class="profile-name-view" id="roomNameView"></div>
-        <input type="text" id="roomNameInput" class="hidden" placeholder="نام روم" style="max-width:220px;" data-i18n-placeholder="room_name_label">
+        <input type="text" id="roomNameInput" class="hidden" placeholder="نام روم" data-i18n-placeholder="room_name_label">
         <div class="profile-role-badge" id="roomTypeBadge"></div>
       </div>
 
@@ -1631,7 +1644,7 @@
       forgot_phone_required: 'شماره تلفن رو وارد کن', forgot_fill_all_fields: 'همه فیلدها رو پر کن',
       forgot_reset_success: 'رمز عبور تغییر کرد، حالا وارد شو',
       chats_title: 'چت‌ها', menu_title: 'منو',
-      menu_new_dm: 'گفتگوی خصوصی جدید', menu_new_room: 'روم جدید',
+      menu_section_new: 'جدید', menu_section_me: 'من', menu_section_settings: 'تنظیمات', menu_new_dm: 'گفتگوی خصوصی جدید', menu_new_room: 'روم جدید',
       menu_my_profile: 'مشاهده پروفایل', menu_public_rooms: 'روم‌های عمومی',
       menu_invites: 'دعوت‌ها', menu_sessions: 'دستگاه‌ها و نشست‌ها',
       menu_theme: 'تم ظاهری', menu_language: 'زبان', menu_logout: 'خروج', menu_font: 'فونت',
@@ -1743,7 +1756,7 @@
       forgot_phone_required: 'Enter your phone number', forgot_fill_all_fields: 'Please fill in all fields',
       forgot_reset_success: 'Password has been reset, please log in',
       chats_title: 'Chats', menu_title: 'Menu',
-      menu_new_dm: 'New private chat', menu_new_room: 'New room',
+      menu_section_new: 'New', menu_section_me: 'Me', menu_section_settings: 'Settings', menu_new_dm: 'New private chat', menu_new_room: 'New room',
       menu_my_profile: 'View profile', menu_public_rooms: 'Public rooms',
       menu_invites: 'Invites', menu_sessions: 'Devices & sessions',
       menu_theme: 'Appearance', menu_language: 'Language', menu_logout: 'Log out', menu_font: 'Font',
@@ -2694,11 +2707,15 @@
   // display:none).
   function positionHoverMenu(menu) {
     menu.style.setProperty('--pos-shift', '0px');
+    menu.classList.remove('below');
     const rect = menu.getBoundingClientRect();
     const margin = 8;
+    // No room above (first visible messages, under a sticky header)? Open below the bubble.
+    if (rect.top < 72) menu.classList.add('below');
+    const r2 = menu.getBoundingClientRect();
     let shift = 0;
-    if (rect.right > window.innerWidth - margin) shift -= (rect.right - (window.innerWidth - margin));
-    if (rect.left + shift < margin) shift += margin - (rect.left + shift);
+    if (r2.right > window.innerWidth - margin) shift -= (r2.right - (window.innerWidth - margin));
+    if (r2.left + shift < margin) shift += margin - (r2.left + shift);
     menu.style.setProperty('--pos-shift', `${shift}px`);
   }
 
