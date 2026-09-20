@@ -542,7 +542,8 @@
   }
   .msg-row.mine .msg-hover-actions{ left:0; }
   .msg-row:not(.mine) .msg-hover-actions{ right:0; }
-  .msg-row:hover .msg-hover-actions{
+  /* Click-to-open (no hover peek): .menu-open is toggled by tapping the message */
+  .msg-row.menu-open .msg-hover-actions{
     opacity:1; visibility:visible; pointer-events:auto;
     transform: translate(var(--pos-shift, 0px), 0) scale(1);
   }
@@ -550,7 +551,7 @@
   /* Flipped below the bubble when there is no room above (first messages) */
   .msg-hover-actions.below{ top:100%; bottom:auto; margin:6px 0 0; }
   .msg-hover-actions.below{ transform: translate(var(--pos-shift, 0px), -6px) scale(.95); }
-  .msg-row:hover .msg-hover-actions.below{ transform: translate(var(--pos-shift, 0px), 0) scale(1); }
+  .msg-row.menu-open .msg-hover-actions.below{ transform: translate(var(--pos-shift, 0px), 0) scale(1); }
 
   .msg-reaction-row{
     display:flex; gap:2px; padding-bottom:5px; margin-bottom:1px;
@@ -568,7 +569,9 @@
     font-size:12.5px; color: var(--ink); white-space:nowrap;
   }
   .msg-action-item:hover{ background: rgba(var(--surface-rgb),0.14); }
-  .msg-action-item-icon{ font-size:13px; flex:none; width:16px; text-align:center; }
+  .msg-action-item-icon{ font-size:13px; flex:none; width:16px; text-align:center; display:flex; align-items:center; justify-content:center; }
+  .msg-action-item-icon svg{ width:15px; height:15px; display:block; }
+  .msg-pin-tag svg{ width:11px; height:11px; display:inline-block; vertical-align:-1px; }
   .msg-action-item.danger{ color:#e05a5a; }
 
   .bubble.pinned{ border: 1px solid rgba(63,169,245,0.55); }
@@ -2722,11 +2725,24 @@
   // Closes the hover popover right after picking an action or reaction,
   // even though the mouse/finger may still be over the row — otherwise it
   // would just sit open until the pointer actually moved away.
+  function closeAllHoverMenus() {
+    document.querySelectorAll('.msg-row.menu-open').forEach((r) => {
+      r.classList.remove('menu-open');
+      const menu = r.querySelector('.msg-hover-actions');
+      if (menu) closeHoverMenu(menu);
+    });
+  }
+
   function closeHoverMenu(menu) {
     if (!menu) return;
     menu.classList.add('force-closed');
     const reopenAllowed = () => menu.classList.remove('force-closed');
     const row = menu.closest('.msg-row');
+    if (row) {
+      row.classList.remove('menu-open');
+      row.addEventListener('mouseleave', reopenAllowed, { once: true });
+    }
+    if (row) row.classList.remove('menu-open');
     if (row) {
       row.addEventListener('mouseleave', reopenAllowed, { once: true });
     }
@@ -2865,7 +2881,7 @@
     const bubbleClasses = 'bubble' + (isSticker ? ' sticker-bubble' + (mine ? ' mine' : '') : '') +
       (m.pinned_at ? ' pinned' : '') + (m.deleted_at ? ' deleted' : '');
     const editedTag = (m.edited_at && !m.deleted_at) ? `<span class="msg-edited-tag">${escapeHtml(t('edited_tag'))}</span>` : '';
-    const pinTag = m.pinned_at ? '<span class="msg-pin-tag">📌</span>' : '';
+    const pinTag = m.pinned_at ? '<span class="msg-pin-tag"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4h6l1 7 3 3v2H5v-2l3-3 1-7zM12 16v5"/></svg></span>' : '';
     const ticksTag = mine ? `<span class="msg-ticks${isSeenByOthers(m.id) ? ' seen' : ''}">${isSeenByOthers(m.id) ? '✓✓' : '✓'}</span>` : '';
 
     const stickerHtml = isSticker
@@ -2886,13 +2902,13 @@
       const reactionBtns = REACTION_EMOJIS.map(e => `<div class="msg-reaction-btn" data-emoji="${e}">${e}</div>`).join('');
 
       const items = [];
-      items.push(`<div class="msg-action-item" data-action="reply"><span class="msg-action-item-icon">↩️</span>${escapeHtml(t('reply'))}</div>`);
-      items.push(`<div class="msg-action-item" data-action="forward"><span class="msg-action-item-icon">↪️</span>${escapeHtml(t('forward'))}</div>`);
-      items.push(`<div class="msg-action-item" data-action="copy"><span class="msg-action-item-icon">📋</span>${escapeHtml(t('copy'))}</div>`);
-      items.push(`<div class="msg-action-item" data-action="${m.pinned_at ? 'unpin' : 'pin'}"><span class="msg-action-item-icon">📌</span>${escapeHtml(m.pinned_at ? t('unpin') : t('pin'))}</div>`);
+      items.push(`<div class="msg-action-item" data-action="reply"><span class="msg-action-item-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 14L5 9l5-5M5 9h9a7 7 0 017 7v2"/></svg></span>${escapeHtml(t('reply'))}</div>`);
+      items.push(`<div class="msg-action-item" data-action="forward"><span class="msg-action-item-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 14l5-5-5-5M19 9h-9a7 7 0 00-7 7v2"/></svg></span>${escapeHtml(t('forward'))}</div>`);
+      items.push(`<div class="msg-action-item" data-action="copy"><span class="msg-action-item-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 012-2h10"/></svg></span>${escapeHtml(t('copy'))}</div>`);
+      items.push(`<div class="msg-action-item" data-action="${m.pinned_at ? 'unpin' : 'pin'}"><span class="msg-action-item-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4h6l1 7 3 3v2H5v-2l3-3 1-7zM12 16v5"/></svg></span>${escapeHtml(m.pinned_at ? t('unpin') : t('pin'))}</div>`);
       if (mine) {
-        items.push(`<div class="msg-action-item" data-action="edit"><span class="msg-action-item-icon">✏️</span>${escapeHtml(t('edit'))}</div>`);
-        items.push(`<div class="msg-action-item danger" data-action="delete"><span class="msg-action-item-icon">🗑️</span>${escapeHtml(t('delete'))}</div>`);
+        items.push(`<div class="msg-action-item" data-action="edit"><span class="msg-action-item-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3l4 4L8 20l-5 1 1-5L17 3z"/></svg></span>${escapeHtml(t('edit'))}</div>`);
+        items.push(`<div class="msg-action-item danger" data-action="delete"><span class="msg-action-item-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9 7V5a1 1 0 011-1h4a1 1 0 011 1v2m3 0l-1 13a1 1 0 01-1 1H8a1 1 0 01-1-1L6 7"/></svg></span>${escapeHtml(t('delete'))}</div>`);
       }
 
       contentHtml += `<div class="msg-hover-actions">
@@ -2906,7 +2922,28 @@
 
     const hoverMenu = row.querySelector('.msg-hover-actions');
     if (hoverMenu) {
-      row.addEventListener('mouseenter', () => positionHoverMenu(hoverMenu));
+      // Click-to-toggle: tapping the message opens the menu, tapping again
+      // (or anywhere else / Escape) closes it. No hover peek on desktop.
+      row.addEventListener('click', (e) => {
+        if (e.target.closest('.msg-hover-actions')) return;
+        if (e.target.closest('a, img, video, audio, button, input, textarea, select')) return;
+        const wasOpen = row.classList.contains('menu-open');
+        closeAllHoverMenus();
+        if (!wasOpen) {
+          positionHoverMenu(hoverMenu);
+          hoverMenu.classList.remove('force-closed');
+          row.classList.add('menu-open');
+        }
+      });
+      if (!window.__msgMenuGlobalClose) {
+        window.__msgMenuGlobalClose = true;
+        document.addEventListener('click', (e) => {
+          if (!e.target.closest('.msg-row.menu-open')) closeAllHoverMenus();
+        });
+        document.addEventListener('keydown', (e) => {
+          if (e.key === 'Escape') closeAllHoverMenus();
+        });
+      }
     }
 
     row.querySelectorAll('.msg-action-item').forEach(btn => {
