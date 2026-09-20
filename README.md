@@ -72,7 +72,7 @@ Real-time group + direct-message chat platform with a full admin panel.
 این پروژه با حذف مقادیر حساس آماده شده تا هرکسی خودش آن‌ها را بسازد:
 
 1. **فایل `.env` وجود ندارد** — فقط `.env.example` هست. باید یک فایل `.env` جدید بسازید و مقادیر خودتان (کلیدهای رمزنگاری، رمز JWT و ...) را داخلش بگذارید. **هیچ‌کدام از این مقادیر را از جای دیگری کپی نکنید** — هرکدام باید یکتا و مخصوص سرور خودتان باشند.
-2. **شمارهٔ سوپرادمین هاردکد است** — داخل فایل `helpers/superAdmin.js` مقدار `SUPER_ADMIN_PHONE_DIGITS` روی `9123456789` تنظیم شده که فقط یک **مقدار نمونه/جای‌گیر (placeholder)** است، نه شمارهٔ واقعی کسی. حتماً قبل از اجرا آن را با شمارهٔ موبایل خودتان جایگزین کنید (بخش «تبدیل شدن به سوپرادمین» را ببینید).
+2. **شمارهٔ سوپرادمین هاردکد نیست** — تنها راه تعیین مالک داشبورد، متغیر محیطی `SUPER_ADMIN_PHONE` است (مثلاً `09106736500`). هر حسابی که با این شماره ثبت‌نام کند، تنها `super_admin` می‌شود و در هر بوت سرور، نقش‌های `admin`/`super_admin` از بقیه گرفته می‌شود.
 
 ### 🚀 راه‌اندازی روی سرور (VPS)
 
@@ -141,13 +141,14 @@ sudo certbot --nginx -d yourdomain.com
 
 ### 👑 تبدیل شدن به سوپرادمین (اولین بار)
 
-اولین سوپرادمین با شمارهٔ موبایلی که در `helpers/superAdmin.js` تنظیم شده مشخص می‌شود:
+اولین و تنها سوپرادمین با متغیر محیطی `SUPER_ADMIN_PHONE` مشخص می‌شود (بدون هیچ هاردکدی در کد):
 
-```js
-const SUPER_ADMIN_PHONE_DIGITS = '9123456789'; // ← این فقط یک نمونه است
+```bash
+# در فایل .env (یا Variables سرویس):
+SUPER_ADMIN_PHONE=09106736500
 ```
 
-**قبل از اجرا روی سرور**، این عدد را با شمارهٔ موبایل خودتان (بدون `0` یا `98` ابتدایی) عوض کنید، سپس با همان شماره در اپ ثبت‌نام کنید — به‌محض راه‌اندازی سرور، نقش `super_admin` به‌صورت خودکار به آن حساب داده می‌شود. بعد از آن، از داخل پنل مدیریت (تب نقش‌ها) می‌توانید به بقیهٔ کاربران هم نقش `admin`/`member` بدهید.
+با همان شماره در اپ ثبت‌نام کنید — نقش `super_admin` همان لحظه به آن حساب داده می‌شود و در هر بوت سرور هم از بقیه گرفته می‌شود، پس همیشه فقط همین یک حساب به داشبورد دسترسی دارد.
 
 ### 🔧 متغیرهای محیطی (`.env`)
 
@@ -158,6 +159,7 @@ const SUPER_ADMIN_PHONE_DIGITS = '9123456789'; // ← این فقط یک نمو�
 | `PORT` | پورت سرور | `4000` |
 | `JWT_SECRET` | کلید امضای توکن ورود — **حتماً یک مقدار طولانی و تصادفی خودتان بسازید** | — |
 | `JWT_EXPIRES_IN` | مدت اعتبار توکن ورود | `7d` |
+| `SUPER_ADMIN_PHONE` | تنها شمارهٔ مالک داشبورد (مثلاً `09106736500`) — **الزامی** | — |
 | `DB_PATH` | مسیر فایل دیتابیس SQLite | `./data/chat.db` |
 | `BACKUP_DIR` | مسیر ذخیرهٔ بکاپ‌های دیتابیس | کنار فایل دیتابیس |
 | `CORS_ORIGIN` | دامنه‌های مجاز برای CORS | `*` |
@@ -274,7 +276,7 @@ A Node.js backend with a vanilla-JS single-page frontend for a Persian-language 
 This project ships with sensitive values stripped out so everyone generates their own:
 
 1. **There's no `.env` file** — only `.env.example`. You need to create your own `.env` and fill in your own values (encryption keys, JWT secret, etc). **Don't copy these from anywhere else** — each one should be unique to your server.
-2. **The super-admin phone number is hardcoded** — `SUPER_ADMIN_PHONE_DIGITS` in `helpers/superAdmin.js` is set to `9123456789`, which is only a **placeholder example**, not anyone's real number. Replace it with your own phone number before running the server (see "Becoming super admin" below).
+2. **The super-admin phone is not hardcoded** — the dashboard owner is set only via the `SUPER_ADMIN_PHONE` env var. Whoever registers with that number becomes the sole `super_admin`, and every boot strips `admin`/`super_admin` from everyone else.
 
 ### 🚀 Server setup (VPS)
 
@@ -343,13 +345,13 @@ After that, also restrict `CORS_ORIGIN` in `.env` to `https://yourdomain.com`.
 
 ### 👑 Becoming super admin (first run)
 
-The first super admin is determined by the phone number set in `helpers/superAdmin.js`:
+The first and only super admin is set via the `SUPER_ADMIN_PHONE` env var (nothing is hardcoded in code):
 
-```js
-const SUPER_ADMIN_PHONE_DIGITS = '9123456789'; // ← this is just a placeholder
+```bash
+SUPER_ADMIN_PHONE=09106736500
 ```
 
-**Before running on your server**, change this to your own phone number (digits only, no leading `0` or `98`), then register in the app with that same number — the `super_admin` role is granted to that account automatically on server startup. After that, use the dashboard's Roles tab to grant `admin`/`member` to other users.
+Register in the app with that same number — the `super_admin` role is granted instantly, and every boot strips it from everyone else, so only that one account can ever reach the dashboard.
 
 ### 🔧 Environment variables (`.env`)
 
