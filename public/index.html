@@ -933,6 +933,36 @@
   #authSubmit:is(:hover, :focus-visible):not(:disabled)::after{ transform:translateY(-50%) scale(1.15); }
   #authSubmit:focus-visible{ outline:2px solid #7cc4ff; outline-offset:3px; }
   #authSubmit:disabled::before, #authSubmit:disabled::after{ display:none; }
+  /* Loading shimmer on the hero button while the request is in flight */
+  #authSubmit:disabled{ position:relative; overflow:hidden; }
+  #authSubmit:disabled::after{
+    display:block; content:""; position:absolute; inset:0; z-index:1;
+    background:linear-gradient(100deg, transparent 20%, rgba(255,255,255,.45) 50%, transparent 80%);
+    transform:translateX(0); animation:obsiShimmer 1.1s linear infinite;
+  }
+  html[dir="rtl"] #authSubmit:disabled::after{ animation-name:obsiShimmerRtl; }
+  @keyframes obsiShimmer{ from{ transform:translateX(-100%); } to{ transform:translateX(100%); } }
+  @keyframes obsiShimmerRtl{ from{ transform:translateX(100%); } to{ transform:translateX(-100%); } }
+  /* Gradient auth title (falls back to plain ink where background-clip is unsupported) */
+  .auth-title{
+    background:linear-gradient(120deg, var(--ink) 30%, var(--tg-blue) 70%, var(--ink) 110%);
+    background-size:200% auto; -webkit-background-clip:text; background-clip:text;
+    -webkit-text-fill-color:transparent; color:var(--ink);
+    animation:obsiTitleSheen 7s ease-in-out infinite;
+  }
+  @keyframes obsiTitleSheen{ 0%,100%{ background-position:0% center; } 50%{ background-position:100% center; } }
+  /* Chat-list cards: lift + glow on hover, pulsing unread dot */
+  .room-item:hover{ box-shadow:0 8px 24px rgba(63,169,245,.14); }
+  .room-item.active{ box-shadow:0 0 0 1px rgba(63,169,245,.35), 0 8px 24px rgba(63,169,245,.12); }
+  .room-unread-dot{ position:relative; }
+  .room-unread-dot::after{
+    content:""; position:absolute; inset:-4px; border-radius:50%;
+    border:2px solid var(--tg-blue); opacity:.7; animation:obsiPing 1.8s ease-out infinite;
+  }
+  @keyframes obsiPing{ 0%{ transform:scale(.6); opacity:.8; } 100%{ transform:scale(1.4); opacity:0; } }
+  @media (prefers-reduced-motion: reduce){
+    #authSubmit:disabled::after, .room-unread-dot::after, .auth-title{ animation:none !important; }
+  }
   /* Visible keyboard focus everywhere (mouse users unaffected) */
   :focus-visible{ outline:2px solid var(--tg-blue); outline-offset:2px; }
   .icon-btn:focus-visible{ outline-offset:3px; }
