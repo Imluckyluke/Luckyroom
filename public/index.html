@@ -6,6 +6,7 @@
 <title>چت‌روم</title>
 <link rel="manifest" href="/manifest.json">
 <meta name="theme-color" content="#0B0D14">
+<meta name="description" content="چت‌روم فارسی — گفتگوی گروهی و خصوصی بلادرنگ با تم مدرن | Persian real-time group and private chat">
 <link rel="icon" href="/icons/icon-192.png">
 <link rel="apple-touch-icon" href="/icons/icon-192.png">
 <meta name="mobile-web-app-capable" content="yes">
@@ -902,6 +903,49 @@
 
     .modal{ max-width:none; width:92%; padding:20px; }
   }
+  /* ===== ObsidianUI-inspired layer (components: arrow-fill-button, dotted-grid; MIT, https://www.obsidianui.dev) ===== */
+  #authDots{ position:fixed; inset:0; width:100%; height:100%; z-index:0; pointer-events:none; opacity:.55; }
+  .auth-wrap{ position:relative; }
+  .auth-card{
+    border:1px solid rgba(255,255,255,.14);
+    box-shadow:0 24px 70px rgba(0,0,0,.5), 0 0 44px rgba(63,169,245,.12);
+  }
+  /* Arrow-fill primary button: sliding fill pill + forward arrow (CSS-only port, no markup change) */
+  .auth-btn{
+    position:relative; overflow:hidden; isolation:isolate;
+    border-radius:1000px !important; padding:13px 12px;
+  }
+  .auth-btn::before{
+    content:""; position:absolute; top:3px; bottom:3px; inset-inline-end:3px; width:34px;
+    border-radius:1000px; background:rgba(255,255,255,.28); z-index:0;
+    transition:inset .38s cubic-bezier(.785,.135,.15,.86), background .38s ease;
+  }
+  .auth-btn::after{
+    content:"\2190"; position:absolute; inset-inline-end:12px; top:50%; transform:translateY(-50%);
+    z-index:1; font-weight:800; font-size:15px; transition:transform .38s cubic-bezier(.785,.135,.15,.86);
+  }
+  html[dir="ltr"] .auth-btn::after{ content:"\2192"; }
+  .auth-btn:is(:hover, :focus-visible):not(:disabled)::before{ inset-inline-end:3px; inset-inline-start:3px; width:auto; background:#fff; }
+  .auth-btn:is(:hover, :focus-visible):not(:disabled){ color:#0B1220; }
+  .auth-btn:is(:hover, :focus-visible):not(:disabled)::after{ transform:translateY(-50%) scale(1.15); }
+  .auth-btn:focus-visible{ outline:2px solid #7cc4ff; outline-offset:3px; }
+  .auth-btn:disabled::before, .auth-btn:disabled::after{ display:none; }
+  /* Visible keyboard focus everywhere (mouse users unaffected) */
+  :focus-visible{ outline:2px solid var(--tg-blue); outline-offset:2px; }
+  .icon-btn:focus-visible{ outline-offset:3px; }
+  /* 44px touch targets on touch devices */
+  @media (pointer:coarse){
+    .icon-btn{ min-width:44px; min-height:44px; }
+    .search-pill input{ min-height:44px; }
+    .field input{ min-height:48px; }
+  }
+  /* Friendlier empty states without touching any markup */
+  .no-chat{ flex-direction:column; gap:10px; }
+  .no-chat::before{ content:"\1F4AC"; font-size:42px; line-height:1; }
+  @media (max-width: 820px){
+    .auth-card{ width:92%; padding:28px 22px; }
+    #authDots{ opacity:.4; }
+  }
   @media (prefers-reduced-motion: reduce){
     .orb{ animation:none; } .msg-row.mine, .msg-row:not(.mine){ animation:none; }
     .modal-overlay:not(.hidden), .modal-overlay:not(.hidden) .modal,
@@ -935,6 +979,7 @@
 
 <!-- ===== AUTH SCREEN ===== -->
 <div class="auth-wrap" id="authScreen">
+  <canvas id="authDots" aria-hidden="true"></canvas>
   <div class="auth-card glass" style="position:relative;">
     <div class="auth-lang-switch" id="authLangSwitch">
       <div class="icon-circle" id="authLangBtn" title="زبان">🌐</div>
@@ -4733,6 +4778,67 @@
   if (token && me) {
     enterApp().catch(() => el('logoutBtn').click());
   }
+})();
+</script>
+<script>
+/* UI/UX enhancement layer: keyboard-operable icon buttons + dotted-grid
+   auth background (vanilla port of ObsidianUI dotted-grid; MIT,
+   https://www.obsidianui.dev). No dependency on app state. */
+(function(){
+  // 1) Icon-only <div> controls become keyboard operable.
+  document.querySelectorAll('div.icon-btn, div.icon-circle').forEach(function(elm){
+    if(!elm.hasAttribute('tabindex')) elm.setAttribute('tabindex', '0');
+    if(!elm.hasAttribute('role')) elm.setAttribute('role', 'button');
+    elm.addEventListener('keydown', function(e){
+      if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); elm.click(); }
+    });
+  });
+
+  // 2) Lightweight dotted-grid canvas behind the auth card: twinkling dots
+  // + pointer glow. Static frame when reduced-motion is preferred; the loop
+  // idles while the auth screen is hidden.
+  var canvas = document.getElementById('authDots');
+  var wrap = document.getElementById('authScreen');
+  if(!canvas || !wrap || !canvas.getContext || !window.matchMedia) return;
+  var ctx = canvas.getContext('2d');
+  var reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
+  var SP = 26, dots = [], W = 0, H = 0, mx = -9999, my = -9999;
+  function resize(){
+    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    W = window.innerWidth; H = window.innerHeight;
+    canvas.width = Math.floor(W * dpr); canvas.height = Math.floor(H * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    dots = [];
+    for(var y = SP / 2; y < H; y += SP){
+      for(var x = SP / 2; x < W; x += SP){
+        dots.push({ x: x, y: y, p: Math.random() * 6.28, s: 0.6 + Math.random() * 1.4 });
+      }
+    }
+  }
+  function draw(time){
+    ctx.clearRect(0, 0, W, H);
+    for(var i = 0; i < dots.length; i++){
+      var d = dots[i];
+      var tw = 0.5 + 0.5 * Math.sin(time * d.s + d.p);
+      var dx = d.x - mx, dy = d.y - my;
+      var glow = Math.max(0, 1 - Math.sqrt(dx * dx + dy * dy) / 220);
+      var a = 0.10 + tw * 0.16 + glow * 0.45;
+      var r = 1.4 + tw * 0.7 + glow * 1.6;
+      ctx.beginPath();
+      ctx.fillStyle = 'rgba(150,190,255,' + a.toFixed(3) + ')';
+      ctx.arc(d.x, d.y, r, 0, 6.2832);
+      ctx.fill();
+    }
+  }
+  function frame(ms){
+    if(!wrap.classList.contains('hidden')) draw(ms * 0.001);
+    requestAnimationFrame(frame);
+  }
+  window.addEventListener('pointermove', function(e){ mx = e.clientX; my = e.clientY; }, { passive: true });
+  window.addEventListener('resize', function(){ resize(); if(reduce.matches) draw(1); });
+  resize();
+  if(reduce.matches){ draw(1); }
+  else { requestAnimationFrame(frame); }
 })();
 </script>
 
